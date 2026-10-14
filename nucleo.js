@@ -52,10 +52,50 @@ const arred = n => Math.round(n * 100) / 100;
 
 /* ---------- leitura do extrato ---------- */
 
-function lerCSV(texto) {
-  const linhas = texto.replace(/^﻿/, '').split(/\r?\n/);
-  const inicio = linhas.findIndex(l => semAcento(l).startsWith('data lancamento'));
-  if (inicio < 0) throw new Error('Não achei a linha que começa com "Data Lançamento". Esse arquivo parece não ser um extrato do Inter.');
+/* O Inter exporta ora em UTF-8, ora em ANSI (windows-1252). Lido como UTF-8, o
+   arquivo ANSI vira texto com caracteres de substituição e o cabeçalho deixa de
+   ser reconhecido, então testamos a codificação em vez de supor. */
+function decodificar(bytes) {
+  if (typeof bytes === 'string') return bytes;
+  const dados = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(dados);
+  } catch (e) {
+    return new TextDecoder('windows-1252').decode(dados);
+  }
+}
+
+/* O cabeçalho pode vir com ou sem acento, e o acento pode ter chegado corrompido.
+   Por isso procuramos as peças do nome, e não o nome exato. */
+function pareceCabecalho(linha) {
+  const t = semAcento(linha);
+  return /\bdata\b/.test(t) && /lan[a-zÀ-ÿ�]*amento/.test(t);
+}
+
+/* O extrato do Inter sempre sai com ponto e vírgula, porque a vírgula é o
+   separador decimal. Se o arquivo chegou com vírgula separando os campos, ele
+   passou pelo Excel e os valores ficaram ambíguos: R$ 38.899,40 vira três
+   pedaços. Nesse caso é mais honesto recusar do que entregar número errado. */
+function conferirSeparador(linha) {
+  const pontoEVirgula = (linha.match(/;/g) || []).length;
+  if (pontoEVirgula >= 3) return;
+  throw new Error('Este CSV está com vírgula separando as colunas, o que acontece quando o ' +
+    'arquivo é aberto e salvo de novo pelo Excel. Os valores ficam ambíguos e eu prefiro ' +
+    'não adivinhar. Baixe o extrato de novo no Inter e carregue sem abrir no Excel, ou use o OFX.');
+}
+
+function lerCSV(bytes) {
+  const texto = decodificar(bytes).replace(/^﻿/, '');
+  const linhas = texto.split(/\r?\n/);
+  const inicio = linhas.findIndex(pareceCabecalho);
+  if (inicio < 0) {
+    const amostra = linhas.filter(l => l.trim()).slice(0, 3).join(' / ').slice(0, 120);
+    throw new Error('Não achei a linha de cabeçalho com Data e Lançamento. ' +
+      'Confira se é o extrato da conta corrente, e não a fatura do cartão. ' +
+      'As primeiras linhas do arquivo são: ' + (amostra || '(arquivo vazio)'));
+  }
+
+  conferirSeparador(linhas[inicio]);
   const saida = [];
   for (const linha of linhas.slice(inicio + 1)) {
     if (!linha.trim()) continue;
@@ -67,10 +107,15 @@ function lerCSV(texto) {
     if (!Number.isFinite(valor)) continue;
     saida.push({ data: p[0].trim(), hist: p[1].trim(), desc: p[2].trim(), valor });
   }
+  if (!saida.length) {
+    throw new Error('Achei o cabeçalho, mas nenhuma linha de lançamento depois dele. ' +
+      'O arquivo pode estar vazio ou ter sido salvo em outro formato pelo Excel.');
+  }
   return saida;
 }
 
-function lerOFX(texto) {
+function lerOFX(bytes) {
+  const texto = decodificar(bytes);
   const campo = (bloco, tag) => {
     const achado = bloco.match(new RegExp('<' + tag + '>(.*?)[\\r\\n<]'));
     return achado ? achado[1].trim() : '';
@@ -93,8 +138,11 @@ function lerOFX(texto) {
   return saida;
 }
 
-function lerExtrato(nome, texto) {
-  return /\.ofx$/i.test(nome) ? lerOFX(texto) : lerCSV(texto);
+function lerExtrato(nome, bytes) {
+  if (/\.(xlsx|xls|pdf|docx|zip)$/i.test(nome)) {
+    throw new Error('Este formato não serve para o extrato. Baixe no Inter em CSV ou OFX.');
+  }
+  return /\.ofx$/i.test(nome) ? lerOFX(bytes) : lerCSV(bytes);
 }
 
 /* ---------- regras de tratamento ---------- */

@@ -148,8 +148,10 @@ function ligarZona(idZona, idInput, aoLer, comoTexto) {
   zona.addEventListener('drop', e => processa(e.dataTransfer.files[0]));
 }
 
-ligarZona('zonaExtrato', 'arqExtrato', (nome, texto) => {
-  const painel = processarExtrato(nome, texto);
+ligarZona('zonaExtrato', 'arqExtrato', (nome, buffer) => {
+  // Lido como bytes para o núcleo decidir a codificação, já que o Inter exporta
+  // ora em UTF-8, ora em ANSI.
+  const painel = processarExtrato(nome, new Uint8Array(buffer));
   estado.painel = painel;
   aplicarMapa(lerGuardado(painel.mes));
   casarVendas();
@@ -165,7 +167,7 @@ ligarZona('zonaExtrato', 'arqExtrato', (nome, texto) => {
     const lista = painel.orfaos.map(o => o.desc + ' em ' + o.data + ', ' + brl(Math.abs(o.valor))).join('; ');
     avisar('Atenção: devolução sem par de mesmo valor, que pode ser devolução parcial. Não abati nada sozinho. ' + lista, 'atencao', true);
   }
-}, true);
+}, false);
 
 ligarZona('zonaPlanilha', 'arqPlanilha', (nome, buffer) => {
   if (typeof XLSX === 'undefined') throw new Error('A biblioteca de planilhas não carregou. Confira a conexão e recarregue a página.');

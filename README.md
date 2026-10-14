@@ -9,7 +9,7 @@ O que foi carregado fica guardado no próprio navegador, então ao reabrir a pá
 ## Como usar
 
 1. Abrir a página.
-2. Soltar o extrato do Banco Inter na primeira caixa. Aceita CSV e OFX.
+2. Soltar o extrato do Banco Inter na primeira caixa. Aceita **.csv** e **.ofx**.
 3. Soltar a planilha Status clientes na segunda caixa. É o arquivo .xlsx com as abas dos meses.
 
 A aba **Despesas** mostra os números do mês e para onde o dinheiro foi. A aba **Conciliação** compara o que foi vendido com o que entrou na conta.
@@ -21,6 +21,16 @@ Da segunda vez em diante só é preciso soltar os arquivos quando houver mês no
 **Despesas.** Cinco números no alto: quanto entrou, quanto foi vendido no mês, quanto foi vendido no mês anterior com a variação, quanto saiu em despesas e quanto foi para a conta pessoal. Abaixo, o gráfico de barras horizontal das categorias de despesa, com o valor e a fatia do mês ao passar o mouse. Em seguida a lista de despesas, cada uma com um seletor para corrigir a categoria, e a tabela dos pix para a conta pessoal.
 
 **Conciliação.** Vendido no mês contra o que entrou na conta, a diferença entre os dois e o que está a receber de parceiros. Abaixo, a conciliação passo a passo que explica a diferença, as entradas linha a linha, os parceiros a receber no mês escolhido e as vendas mês a mês do ano.
+
+## Sobre o arquivo do extrato
+
+Os dois formatos que o Inter oferece servem, .csv e .ofx, e a página reconhece pelo final do nome. O .ofx costuma ser mais seguro, porque não depende de configuração regional.
+
+O arquivo precisa ser o que o Inter baixou, sem passar pelo Excel. Abrir o .csv no Excel e salvar de novo troca o ponto e vírgula por vírgula, e aí os valores ficam ambíguos, porque R$ 38.899,40 vira três pedaços. Nesse caso a página recusa o arquivo e explica, em vez de mostrar número errado.
+
+A página aceita o .csv tanto em UTF-8 quanto em ANSI, que são as duas codificações que o Inter usa conforme o navegador e o sistema.
+
+Também fica de fora a fatura do cartão, que tem outro formato. Esta página lê o extrato da conta corrente.
 
 ## As regras embutidas
 
