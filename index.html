@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Financeiro IFT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --papel:#EDEAE4; --papel-alto:#F6F4F0; --tinta:#1A1D26; --tinta-fraca:#6B6A66;
+  --hairline:#CFCAC0; --carimbo:#5B3E8E; --entrada:#2E6B5E; --saida:#A33B32;
+  --neutro:#8A6B1F; --venda:#1F5673;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--papel);color:var(--tinta);
+  font-family:"Public Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.folha{max-width:1120px;margin:0 auto;padding:36px 28px 80px}
+
+/* cabeçalho */
+.cabecalho{border-bottom:2px solid var(--tinta);padding-bottom:16px;margin-bottom:22px}
+.sobrenome{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--tinta-fraca);margin-bottom:9px}
+h1{font-family:"Fraunces",Georgia,serif;font-weight:600;font-size:clamp(28px,5vw,42px);
+  line-height:1.05;margin:0 0 6px;letter-spacing:-.01em}
+.periodo{font-size:14px;color:var(--tinta-fraca);margin:0}
+
+/* carregar arquivos */
+.entrada-arquivos{display:grid;grid-template-columns:repeat(auto-fit,minmax(262px,1fr));gap:14px;margin-bottom:16px}
+.solta{border:1.5px dashed var(--hairline);border-radius:4px;background:var(--papel-alto);
+  padding:18px;cursor:pointer;transition:.18s;display:block}
+.solta:hover,.solta.sobre{border-color:var(--carimbo);background:#F0ECF6}
+.solta.pronto{border-style:solid;border-color:var(--entrada)}
+.solta .titulo{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--carimbo);display:block;margin-bottom:8px}
+.solta.pronto .titulo{color:var(--entrada)}
+.solta .ajuda{font-size:13px;color:var(--tinta-fraca);display:block}
+.solta .arquivo{font-size:13.5px;display:block;margin-top:5px;word-break:break-all}
+.solta input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+
+.aviso{font-size:13px;padding:10px 13px;border-radius:3px;margin:0 0 16px;border:1px solid}
+.aviso.erro{color:var(--saida);border-color:var(--saida);background:#F7EFEE}
+.aviso.ok{color:var(--entrada);border-color:var(--entrada);background:#EDF3F1}
+.aviso.atencao{color:var(--neutro);border-color:var(--neutro);background:#F7F2E4}
+
+/* abas */
+.abas{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:26px;border-bottom:1px solid var(--hairline);padding-bottom:0}
+.abas button{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;padding:11px 17px;border:none;border-bottom:2.5px solid transparent;
+  background:transparent;color:var(--tinta-fraca);cursor:pointer;transition:.18s}
+.abas button:hover{color:var(--tinta)}
+.abas button[aria-selected=true]{color:var(--tinta);border-bottom-color:var(--carimbo)}
+.abas button:disabled{opacity:.35;cursor:not-allowed}
+
+/* cards */
+.carimbos{display:grid;grid-template-columns:repeat(auto-fit,minmax(194px,1fr));gap:14px;margin-bottom:14px}
+.carimbo{background:var(--papel-alto);border:1.5px solid var(--carimbo);border-radius:3px;padding:17px;
+  box-shadow:inset 0 0 0 3px var(--papel-alto),inset 0 0 0 4.5px var(--carimbo)}
+.carimbo .rotulo{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--carimbo);margin-bottom:10px;display:block}
+.carimbo .cifra{font-family:"Fraunces",Georgia,serif;font-size:clamp(20px,2.9vw,27px);font-weight:600;
+  font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-.02em;display:block}
+.carimbo .nota{font-size:12px;color:var(--tinta-fraca);margin-top:8px;display:block}
+.carimbo.verde{border-color:var(--entrada);box-shadow:inset 0 0 0 3px var(--papel-alto),inset 0 0 0 4.5px var(--entrada)}
+.carimbo.verde .rotulo,.carimbo.verde .cifra{color:var(--entrada)}
+.carimbo.vermelho{border-color:var(--saida);box-shadow:inset 0 0 0 3px var(--papel-alto),inset 0 0 0 4.5px var(--saida)}
+.carimbo.vermelho .rotulo,.carimbo.vermelho .cifra{color:var(--saida)}
+.carimbo.azul{border-color:var(--venda);box-shadow:inset 0 0 0 3px var(--papel-alto),inset 0 0 0 4.5px var(--venda)}
+.carimbo.azul .rotulo,.carimbo.azul .cifra{color:var(--venda)}
+.rodape-carimbos{font-size:12.5px;color:var(--tinta-fraca);border-top:1px solid var(--hairline);
+  padding-top:12px;margin:0 0 42px}
+
+h2{font-family:"Fraunces",Georgia,serif;font-weight:600;font-size:21px;margin:0 0 4px;letter-spacing:-.01em}
+.subtitulo{font-size:13.5px;color:var(--tinta-fraca);margin:0 0 18px;max-width:66ch}
+section{margin-bottom:46px}
+
+/* conciliação */
+.ponte{display:flex;flex-direction:column}
+.ponte .passo{display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:14px;
+  padding:9px 0;border-bottom:1px solid var(--hairline)}
+.ponte .passo .texto{font-size:14px}
+.ponte .passo .texto small{display:block;font-size:12px;color:var(--tinta-fraca);margin-top:2px}
+.ponte .passo .cifra{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:14px;
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+.ponte .passo.base .texto,.ponte .passo.base .cifra{font-weight:600}
+.ponte .passo.menos .cifra{color:var(--saida)}
+.ponte .passo.mais .cifra{color:var(--entrada)}
+.ponte .passo.fecho{border-bottom:none;border-top:1.5px solid var(--tinta);margin-top:4px;padding-top:11px}
+.ponte .passo.fecho .texto,.ponte .passo.fecho .cifra{font-weight:600}
+
+/* barras */
+.barras{display:flex;flex-direction:column;gap:9px}
+.barra{display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:14px;
+  border-bottom:1px solid var(--hairline);padding-bottom:7px}
+.barra .nome{font-size:14px}
+.barra .qtd{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;color:var(--tinta-fraca);margin-left:8px}
+.barra .val{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:14px;font-variant-numeric:tabular-nums}
+.barra .trilho{grid-column:1/-1;height:4px;background:var(--hairline);border-radius:2px;overflow:hidden}
+.barra .preenche{height:100%;background:var(--carimbo);border-radius:2px;transition:width .3s ease}
+.barra .preenche.venda{background:var(--venda)}
+
+/* ferramentas e tabelas */
+.ferramentas{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
+input[type=search]{flex:1 1 220px;min-width:170px;background:var(--papel-alto);border:1px solid var(--hairline);
+  border-radius:3px;padding:9px 12px;font-family:inherit;font-size:14px;color:var(--tinta)}
+input[type=search]:focus{outline:2px solid var(--carimbo);outline-offset:1px}
+.legenda{font-size:12.5px;color:var(--tinta-fraca)}
+.botao{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;letter-spacing:.14em;
+  text-transform:uppercase;padding:9px 14px;border:1.5px solid var(--carimbo);background:transparent;
+  color:var(--carimbo);border-radius:3px;cursor:pointer;transition:.18s}
+.botao:hover{background:var(--carimbo);color:var(--papel)}
+
+table{width:100%;border-collapse:collapse}
+thead th{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--tinta-fraca);font-weight:500;text-align:left;
+  padding:0 10px 9px;border-bottom:1.5px solid var(--tinta);white-space:nowrap}
+thead th.num{text-align:right}
+tbody td{padding:9px 10px;border-bottom:1px solid var(--hairline);vertical-align:middle}
+tbody tr:hover{background:var(--papel-alto)}
+td.data{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:13px;color:var(--tinta-fraca);white-space:nowrap}
+td.desc{font-size:14px;min-width:180px}
+td.desc .tipo{display:block;font-size:11.5px;color:var(--tinta-fraca)}
+td.obs{font-size:12.5px;color:var(--tinta-fraca)}
+td.valor{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:14px;text-align:right;
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+td.valor.mais{color:var(--entrada)}
+td.valor.menos{color:var(--saida)}
+select{font-family:inherit;font-size:13px;color:var(--tinta);background:transparent;
+  border:1px solid transparent;border-bottom:1px dashed var(--hairline);border-radius:2px;
+  padding:4px 6px;max-width:100%;cursor:pointer}
+select:hover{border-color:var(--hairline);background:var(--papel-alto)}
+select:focus{outline:2px solid var(--carimbo);outline-offset:1px}
+select.pendente{color:var(--neutro);font-style:italic}
+select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:8px 11px;font-size:13.5px}
+
+.vazio{padding:24px 10px;color:var(--tinta-fraca);font-size:14px}
+.nota-fim{margin-top:30px;padding-top:16px;border-top:1px solid var(--hairline);
+  font-size:12.5px;color:var(--tinta-fraca);max-width:76ch}
+.escondido{display:none}
+.tabela-rolagem{overflow-x:auto}
+
+@media (max-width:640px){
+  .folha{padding:24px 15px 60px}
+  td.data{font-size:12px}
+  thead th{font-size:9px;letter-spacing:.1em}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="folha">
+
+  <header class="cabecalho">
+    <span class="sobrenome">Banco Inter &middot; Isabella Fortunato Traduções</span>
+    <h1>Financeiro IFT</h1>
+    <p class="periodo">Solte o extrato do Inter e a planilha de status de clientes. A conta inteira roda aqui no seu navegador e nenhum arquivo sai do seu computador.</p>
+  </header>
+
+  <div class="entrada-arquivos">
+    <label class="solta" id="zonaExtrato">
+      <span class="titulo">1 &middot; Extrato do Inter</span>
+      <span class="ajuda">Arraste aqui ou clique para escolher. Aceita CSV e OFX.</span>
+      <span class="arquivo" id="nomeExtrato"></span>
+      <input type="file" id="arqExtrato" accept=".csv,.ofx,.txt">
+    </label>
+    <label class="solta" id="zonaPlanilha">
+      <span class="titulo">2 &middot; Status clientes</span>
+      <span class="ajuda">Arraste aqui ou clique para escolher. É o .xlsx com as abas dos meses.</span>
+      <span class="arquivo" id="nomePlanilha"></span>
+      <input type="file" id="arqPlanilha" accept=".xlsx,.xlsm">
+    </label>
+  </div>
+
+  <p class="aviso escondido" id="aviso"></p>
+
+  <div class="abas" role="tablist">
+    <button type="button" id="abaMes" role="tab" aria-selected="true" disabled>Mês</button>
+    <button type="button" id="abaVendas" role="tab" aria-selected="false" disabled>Vendas</button>
+  </div>
+
+  <!-- ================= TELA DO MÊS ================= -->
+  <div id="telaMes" class="escondido">
+    <section class="carimbos" aria-label="Totais do mês">
+      <div class="carimbo azul">
+        <span class="rotulo">Vendas fechadas no mês</span>
+        <span class="cifra" id="cVenda">&mdash;</span>
+        <span class="nota" id="nVenda"></span>
+      </div>
+      <div class="carimbo verde">
+        <span class="rotulo">Dinheiro que entrou na conta</span>
+        <span class="cifra" id="cEnt">&mdash;</span>
+        <span class="nota" id="nEnt"></span>
+      </div>
+      <div class="carimbo vermelho">
+        <span class="rotulo">Saídas para terceiros</span>
+        <span class="cifra" id="cSai">&mdash;</span>
+        <span class="nota" id="nSai"></span>
+      </div>
+      <div class="carimbo">
+        <span class="rotulo">Pix para a conta pessoal</span>
+        <span class="cifra" id="cPes">&mdash;</span>
+        <span class="nota" id="nPes"></span>
+      </div>
+      <div class="carimbo">
+        <span class="rotulo">Resultado do mês</span>
+        <span class="cifra" id="cSaldo">&mdash;</span>
+        <span class="nota">Entradas menos todas as saídas</span>
+      </div>
+    </section>
+    <p class="rodape-carimbos" id="rodape"></p>
+
+    <section id="secaoPonte">
+      <h2>Por que a venda e a entrada não são o mesmo número</h2>
+      <p class="subtitulo">Como o pagamento acontece na aprovação, os dois números só se separam por três motivos: o parceiro acerta no mês seguinte, o cartão pelo link cai 14 dias depois e o Correio entra na conta sem ser venda.</p>
+      <div class="ponte" id="ponte"></div>
+    </section>
+
+    <section>
+      <h2>Saídas por categoria</h2>
+      <p class="subtitulo">Os valores se refazem sozinhos quando você troca a categoria de uma linha na tabela de saídas.</p>
+      <div class="barras" id="barrasSaida"></div>
+    </section>
+
+    <section>
+      <h2>Saídas, linha a linha</h2>
+      <p class="subtitulo">Trocar a categoria de um favorecido muda todos os lançamentos dele de uma vez. O trabalho fica guardado neste navegador, e o botão de salvar baixa um arquivo que você pode carregar de volta depois.</p>
+      <div class="ferramentas">
+        <input type="search" id="buscaSaida" placeholder="Buscar por favorecido ou categoria" aria-label="Buscar saída">
+        <button type="button" class="botao" id="btnSalvar">Salvar categorias</button>
+        <button type="button" class="botao" id="btnCarregar">Carregar categorias</button>
+        <input type="file" id="arqCategorias" accept="application/json,.json" hidden>
+        <span class="legenda" id="contaSaida"></span>
+      </div>
+      <div class="tabela-rolagem">
+        <table>
+          <thead><tr><th>Data</th><th>Favorecido</th><th>Categoria</th><th class="num">Valor</th></tr></thead>
+          <tbody id="corpoSaida"></tbody>
+        </table>
+      </div>
+      <p class="vazio escondido" id="vazioSaida">Nenhuma linha corresponde à busca.</p>
+    </section>
+
+    <section>
+      <h2>Entradas, linha a linha</h2>
+      <p class="subtitulo">Quase toda entrada é pagamento de cliente, então aqui não há campo de categoria. A observação só aparece quando o dinheiro comprovadamente não é receita.</p>
+      <div class="ferramentas">
+        <input type="search" id="buscaEnt" placeholder="Buscar por pagador" aria-label="Buscar entrada">
+        <span class="legenda" id="contaEnt"></span>
+      </div>
+      <div class="tabela-rolagem">
+        <table>
+          <thead><tr><th>Data</th><th>Pagador</th><th>Observação</th><th class="num">Valor</th></tr></thead>
+          <tbody id="corpoEnt"></tbody>
+        </table>
+      </div>
+      <p class="vazio escondido" id="vazioEnt">Nenhuma linha corresponde à busca.</p>
+    </section>
+
+    <section>
+      <h2>Pix entre a conta da empresa e a sua conta pessoal</h2>
+      <p class="subtitulo">Movimentação separada do resto, para não se misturar com despesa da empresa nem com receita.</p>
+      <div class="tabela-rolagem">
+        <table>
+          <thead><tr><th>Data</th><th>Sentido</th><th class="num">Valor</th></tr></thead>
+          <tbody id="corpoPes"></tbody>
+        </table>
+      </div>
+      <p class="vazio escondido" id="vazioPes">Nenhum pix para a conta pessoal neste mês.</p>
+    </section>
+
+    <p class="nota-fim" id="notaFim"></p>
+  </div>
+
+  <!-- ================= TELA DE VENDAS ================= -->
+  <div id="telaVendas" class="escondido">
+    <section class="carimbos" aria-label="Totais de vendas">
+      <div class="carimbo azul">
+        <span class="rotulo">Vendas no ano</span>
+        <span class="cifra" id="vAno">&mdash;</span>
+        <span class="nota" id="vAnoNota"></span>
+      </div>
+      <div class="carimbo">
+        <span class="rotulo">Média por mês fechado</span>
+        <span class="cifra" id="vMedia">&mdash;</span>
+        <span class="nota" id="vMediaNota"></span>
+      </div>
+      <div class="carimbo">
+        <span class="rotulo">Ticket médio</span>
+        <span class="cifra" id="vTicket">&mdash;</span>
+        <span class="nota" id="vTicketNota"></span>
+      </div>
+      <div class="carimbo vermelho">
+        <span class="rotulo">A receber de parceiros</span>
+        <span class="cifra" id="vParceiro">&mdash;</span>
+        <span class="nota" id="vParceiroNota"></span>
+      </div>
+    </section>
+    <p class="rodape-carimbos" id="vRodape"></p>
+
+    <section>
+      <h2>Vendas mês a mês</h2>
+      <p class="subtitulo">Tradução mais diligência de cartório e de envio, pela data de aprovação, que é a data em que o cliente paga. A taxa de cartório fica fora, porque é repasse ao notário.</p>
+      <div class="barras" id="barrasVendas"></div>
+    </section>
+
+    <section>
+      <h2>Parceiros a receber</h2>
+      <p class="subtitulo">O que cada parceiro fechou no mês escolhido, que entra no caixa no mês seguinte. A coluna de recebido procura o nome do parceiro nas entradas do extrato carregado, então serve para orientar a cobrança e não para dar baixa.</p>
+      <div class="ferramentas">
+        <label class="legenda" for="mesParceiro">Trabalho fechado em</label>
+        <select id="mesParceiro" class="seletor-mes" aria-label="Mês dos parceiros"></select>
+        <span class="legenda" id="contaParceiro"></span>
+      </div>
+      <div class="tabela-rolagem">
+        <table>
+          <thead><tr><th>Parceiro</th><th class="num">Orçamentos</th><th class="num">Fechado</th><th class="num">Envios</th><th class="num">Encontrado no extrato</th></tr></thead>
+          <tbody id="corpoParceiro"></tbody>
+        </table>
+      </div>
+      <p class="vazio escondido" id="vazioParceiro">Nenhum parceiro com trabalho fechado nesse mês.</p>
+    </section>
+
+    <section>
+      <h2>Como cada venda do mês vira dinheiro</h2>
+      <p class="subtitulo">A mesma venda demora tempos diferentes para cair na conta conforme quem paga e como paga.</p>
+      <div class="barras" id="barrasRegime"></div>
+    </section>
+
+    <p class="nota-fim">Vendas contadas pela data de aprovação em todas as abas da planilha, inclusive quando o orçamento foi aprovado em um mês e registrado na aba de outro. Orçamentos cancelados ficam fora, e o mesmo orçamento repetido em duas abas é contado uma vez só.</p>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="nucleo.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
