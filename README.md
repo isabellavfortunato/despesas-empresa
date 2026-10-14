@@ -56,6 +56,12 @@ As caixas de carregar arquivo, as abas, os campos de busca e os seletores de cat
 
 Só as despesas têm campo de categoria. Trocar a categoria de um favorecido muda todos os lançamentos dele de uma vez, e o trabalho fica guardado no navegador. O botão de salvar baixa um arquivo com as categorias definidas, e o de carregar devolve esse arquivo para dentro da página, o que serve para levar o trabalho de um computador para outro.
 
+## Ícone e tela inicial
+
+O ícone é três barras horizontais de tamanhos diferentes, o mesmo gesto do gráfico de despesas, em branco sobre roxo. Ele foi desenhado grosso de propósito para continuar legível a 16 pixels, que é o tamanho na aba do navegador.
+
+Com o manifesto, dá para salvar a página na tela inicial do celular e ela abre em tela cheia, sem a barra do navegador, com o nome Financeiro. No iPhone é pelo botão de compartilhar e depois Adicionar à Tela de Início; no Android, pelo menu do Chrome e depois Adicionar à tela inicial.
+
 ## Arquivos
 
 | Arquivo | O que faz |
@@ -63,5 +69,10 @@ Só as despesas têm campo de categoria. Trocar a categoria de um favorecido mud
 | `index.html` | A página e todo o estilo |
 | `nucleo.js` | A conta: leitura do extrato, regras de tratamento, categorização e leitura da planilha |
 | `app.js` | A interface: desenha as telas e cuida dos botões |
+| `favicon.svg` | O ícone da aba, em vetor, que serve em qualquer tamanho |
+| `favicon-32.png` | O mesmo ícone em imagem, para navegadores antigos |
+| `apple-touch-icon.png` | O ícone de 180 pixels, usado ao salvar na tela inicial do iPhone |
+| `icone-512.png` | O ícone grande, usado pelo Android e na tela de abertura |
+| `site.webmanifest` | Nome, cores e ícones para quando a página é salva como aplicativo |
 
 A única dependência externa é a biblioteca SheetJS, carregada de CDN, usada apenas para abrir o arquivo .xlsx.
