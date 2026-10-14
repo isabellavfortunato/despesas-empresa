@@ -30,6 +30,14 @@ O pagamento acontece na aprovação, então a data da coluna Aprovado é a data 
 
 A taxa de cartório fica fora da venda, por ser repasse ao notário, e o Correio e DHL aparecem separados, por serem reembolso do custo de envio.
 
+## Relatório mensal
+
+O botão **Imprimir relatório**, ao lado das abas, monta a versão de papel com as duas telas juntas, independentemente de qual estiver aberta. Na janela de impressão do navegador, escolha **Salvar como PDF** no lugar da impressora.
+
+Por padrão o relatório sai resumido, em quatro páginas: capa com o mês, os cinco cards, a conciliação entre venda e entrada, as saídas por categoria, as vendas mês a mês, os parceiros a receber e como cada venda vira dinheiro. Marcando **incluir as tabelas completas** antes de imprimir, entram também as três tabelas de lançamentos, linha a linha, o que leva o documento a cerca de catorze páginas.
+
+As caixas de carregar arquivo, as abas, os campos de busca e os seletores de categoria não vão para o papel. A categoria de cada saída aparece como texto no lugar do seletor.
+
 ## Categorias
 
 Só as saídas têm campo de categoria. Trocar a categoria de um favorecido muda todos os lançamentos dele de uma vez, e o trabalho fica guardado no navegador. O botão de salvar baixa um arquivo com as categorias definidas, e o de carregar devolve esse arquivo para dentro da página, o que serve para levar o trabalho de um computador para outro.

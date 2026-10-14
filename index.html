@@ -47,6 +47,13 @@ h1{font-family:"Fraunces",Georgia,serif;font-weight:600;font-size:clamp(28px,5vw
 .aviso.atencao{color:var(--neutro);border-color:var(--neutro);background:#F7F2E4}
 
 /* abas */
+.barra-abas{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between;
+  border-bottom:1px solid var(--hairline);margin-bottom:26px}
+.barra-abas .abas{border-bottom:none;margin-bottom:0}
+.acoes-impressao{display:flex;align-items:center;gap:12px;padding-bottom:8px;flex-wrap:wrap}
+.caixinha{font-size:12.5px;color:var(--tinta-fraca);display:flex;align-items:center;gap:6px;cursor:pointer}
+.caixinha input{accent-color:var(--carimbo);cursor:pointer}
+.so-papel{display:none}
 .abas{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:26px;border-bottom:1px solid var(--hairline);padding-bottom:0}
 .abas button{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.14em;
   text-transform:uppercase;padding:11px 17px;border:none;border-bottom:2.5px solid transparent;
@@ -148,6 +155,65 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
   thead th{font-size:9px;letter-spacing:.1em}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* ---------- relatório impresso ---------- */
+@page{margin:14mm 12mm}
+@media print{
+  :root{--papel:#fff;--papel-alto:#fff}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body{background:#fff;font-size:10.5pt}
+  .folha{max-width:none;padding:0}
+
+  /* fora do papel: tudo que só serve para operar a página */
+  .cabecalho,.entrada-arquivos,.aviso,.barra-abas,.ferramentas,.escondido{display:none!important}
+  select{display:none!important}
+
+  .so-papel{display:block;border-bottom:2px solid var(--tinta);padding-bottom:12px;margin-bottom:18px}
+  .so-papel h1{font-size:25pt;margin-bottom:4px}
+  .so-papel .periodo{font-size:9.5pt}
+
+  /* as duas telas saem juntas, independentemente da aba aberta */
+  #telaMes,#telaVendas{display:block!important}
+  #telaVendas{break-before:page}
+
+  section{margin-bottom:20px;break-inside:avoid}
+  h2{font-size:13pt;margin-bottom:3px}
+  .subtitulo{font-size:9pt;margin-bottom:10px;max-width:none}
+  .carimbos{grid-template-columns:repeat(5,1fr);gap:7px;break-inside:avoid}
+  .carimbo{padding:9px;box-shadow:none;border-width:1pt}
+  .carimbo .rotulo{font-size:6.5pt;letter-spacing:.1em;margin-bottom:5px}
+  .carimbo .cifra{font-size:13pt}
+  .carimbo .nota{font-size:7.5pt;margin-top:4px}
+  .rodape-carimbos{font-size:8.5pt;margin-bottom:22px}
+
+  .ponte .passo{padding:5px 0}
+  .ponte .passo .texto{font-size:9.5pt}
+  .ponte .passo .texto small{font-size:8pt}
+  .ponte .passo .cifra{font-size:9.5pt}
+
+  .barra{padding-bottom:4px}
+  .barra .nome,.barra .val{font-size:9.5pt}
+  .barra .qtd{font-size:8pt}
+
+  table{font-size:9pt;break-inside:auto}
+  thead{display:table-header-group}
+  tr{break-inside:avoid}
+  thead th{font-size:6.5pt;padding-bottom:5px}
+  tbody td{padding:4px 7px}
+  td.data,td.desc,td.valor,td.obs{font-size:9pt}
+  td.desc .tipo{font-size:7.5pt}
+  /* a categoria vira texto puro, já que o seletor não imprime */
+  td .cat-papel{display:inline!important}
+  .nota-fim{font-size:8pt;margin-top:16px}
+  .vazio{font-size:9pt}
+
+  /* as tabelas longas só entram quando a pessoa pede */
+  body:not(.com-tabelas) #secSaidas,
+  body:not(.com-tabelas) #secEntradas,
+  body:not(.com-tabelas) #secPessoal{display:none!important}
+  .so-tela{display:none!important}
+}
+.cat-papel{display:none}
 </style>
 </head>
 <body>
@@ -176,9 +242,22 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
 
   <p class="aviso escondido" id="aviso"></p>
 
-  <div class="abas" role="tablist">
-    <button type="button" id="abaMes" role="tab" aria-selected="true" disabled>Mês</button>
-    <button type="button" id="abaVendas" role="tab" aria-selected="false" disabled>Vendas</button>
+  <div class="barra-abas">
+    <div class="abas" role="tablist">
+      <button type="button" id="abaMes" role="tab" aria-selected="true" disabled>Mês</button>
+      <button type="button" id="abaVendas" role="tab" aria-selected="false" disabled>Vendas</button>
+    </div>
+    <div class="acoes-impressao">
+      <label class="caixinha"><input type="checkbox" id="optTabelas"> incluir as tabelas completas</label>
+      <button type="button" class="botao" id="btnImprimir" disabled>Imprimir relatório</button>
+    </div>
+  </div>
+
+  <!-- Só aparece no papel, para o relatório ter capa e data. -->
+  <div class="so-papel" id="capa">
+    <span class="sobrenome">Isabella Fortunato Traduções &middot; Banco Inter</span>
+    <h1 id="capaTitulo">Relatório mensal</h1>
+    <p class="periodo" id="capaNota"></p>
   </div>
 
   <!-- ================= TELA DO MÊS ================= -->
@@ -220,13 +299,13 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
 
     <section>
       <h2>Saídas por categoria</h2>
-      <p class="subtitulo">Os valores se refazem sozinhos quando você troca a categoria de uma linha na tabela de saídas.</p>
+      <p class="subtitulo so-tela">Os valores se refazem sozinhos quando você troca a categoria de uma linha na tabela de saídas.</p>
       <div class="barras" id="barrasSaida"></div>
     </section>
 
-    <section>
+    <section id="secSaidas">
       <h2>Saídas, linha a linha</h2>
-      <p class="subtitulo">Trocar a categoria de um favorecido muda todos os lançamentos dele de uma vez. O trabalho fica guardado neste navegador, e o botão de salvar baixa um arquivo que você pode carregar de volta depois.</p>
+      <p class="subtitulo so-tela">Trocar a categoria de um favorecido muda todos os lançamentos dele de uma vez. O trabalho fica guardado neste navegador, e o botão de salvar baixa um arquivo que você pode carregar de volta depois.</p>
       <div class="ferramentas">
         <input type="search" id="buscaSaida" placeholder="Buscar por favorecido ou categoria" aria-label="Buscar saída">
         <button type="button" class="botao" id="btnSalvar">Salvar categorias</button>
@@ -243,9 +322,9 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
       <p class="vazio escondido" id="vazioSaida">Nenhuma linha corresponde à busca.</p>
     </section>
 
-    <section>
+    <section id="secEntradas">
       <h2>Entradas, linha a linha</h2>
-      <p class="subtitulo">Quase toda entrada é pagamento de cliente, então aqui não há campo de categoria. A observação só aparece quando o dinheiro comprovadamente não é receita.</p>
+      <p class="subtitulo so-tela">Quase toda entrada é pagamento de cliente, então aqui não há campo de categoria. A observação só aparece quando o dinheiro comprovadamente não é receita.</p>
       <div class="ferramentas">
         <input type="search" id="buscaEnt" placeholder="Buscar por pagador" aria-label="Buscar entrada">
         <span class="legenda" id="contaEnt"></span>
@@ -259,7 +338,7 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
       <p class="vazio escondido" id="vazioEnt">Nenhuma linha corresponde à busca.</p>
     </section>
 
-    <section>
+    <section id="secPessoal">
       <h2>Pix entre a conta da empresa e a sua conta pessoal</h2>
       <p class="subtitulo">Movimentação separada do resto, para não se misturar com despesa da empresa nem com receita.</p>
       <div class="tabela-rolagem">

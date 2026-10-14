@@ -112,6 +112,7 @@ function casarVendas() {
 function habilitar() {
   el('abaMes').disabled = !estado.painel;
   el('abaVendas').disabled = !estado.planilha;
+  el('btnImprimir').disabled = !estado.painel && !estado.planilha;
   if (estado.painel && estado.aba === 'mes') trocarAba('mes');
   else if (estado.planilha && !estado.painel) trocarAba('vendas');
 }
@@ -301,6 +302,11 @@ function tabelaSaidas(filtro) {
         : 'Categoria salva.', 'ok');
     });
     td3.appendChild(sel);
+    // O seletor não vai para o papel, então a categoria também existe como texto.
+    const noPapel = document.createElement('span');
+    noPapel.className = 'cat-papel';
+    noPapel.textContent = l.cat;
+    td3.appendChild(noPapel);
     const td4 = document.createElement('td');
     td4.className = 'valor menos';
     td4.textContent = '− ' + brl(l.valor);
@@ -388,6 +394,43 @@ el('arqCategorias').addEventListener('change', evento => {
   };
   leitor.readAsText(arquivo);
   evento.target.value = '';
+});
+
+/* ================= RELATÓRIO IMPRESSO ================= */
+
+/* A impressão mostra as duas telas de uma vez, então a página precisa sair do
+   modo de abas e voltar ao normal depois. Fazemos isso pelos eventos do próprio
+   navegador, e não só no clique, para funcionar também quando a pessoa usa
+   Ctrl+P ou manda imprimir pelo menu. */
+function prepararPapel() {
+  if (!estado.painel && !estado.planilha) return;
+  document.body.classList.toggle('com-tabelas', el('optTabelas').checked);
+
+  const quando = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+  el('capaTitulo').textContent = estado.painel
+    ? 'Relatório de ' + estado.painel.mes
+    : 'Relatório de vendas';
+  el('capaNota').textContent = 'Emitido em ' + quando +
+    (estado.planilha ? '. Vendas pela data de aprovação, que é a data do pagamento.' : '.') +
+    (estado.painel && !estado.planilha ? ' Sem a planilha carregada, o relatório sai sem a parte de vendas.' : '');
+
+  // As duas telas precisam estar montadas, mesmo a que está fechada na tela.
+  el('telaMes').classList.toggle('escondido', !estado.painel);
+  el('telaVendas').classList.toggle('escondido', !estado.planilha);
+}
+
+function restaurarTela() {
+  document.body.classList.remove('com-tabelas');
+  trocarAba(estado.aba);
+}
+
+window.addEventListener('beforeprint', prepararPapel);
+window.addEventListener('afterprint', restaurarTela);
+
+el('btnImprimir').addEventListener('click', () => {
+  prepararPapel();
+  // Um respiro para o navegador refazer o layout antes de abrir a impressão.
+  setTimeout(() => { window.print(); restaurarTela(); }, 60);
 });
 
 /* ================= TELA DE VENDAS ================= */
