@@ -14,7 +14,12 @@ const BANCO_CORA = '37880206';
 const CARTAO_C6 = 'Cartão de crédito (link C6)';
 const RETORNO_CORA = 'Retorno do Cora';
 const OUTRA_CONTA = 'Conta da empresa em outro banco';
-const NAO_RECEITA = ['Repasse para o Cora', 'Transferência para o C6', 'Devolução', 'Pagamento de cartão', RETORNO_CORA];
+const SOBRA_DEVOLUCAO = 'Sobra de centavos de devolução';
+const NAO_RECEITA = ['Repasse para o Cora', 'Transferência para o C6', 'Devolução', 'Pagamento de cartão', RETORNO_CORA, SOBRA_DEVOLUCAO];
+/* Diferença máxima aceita entre o valor original e a devolução, e quantos dias
+   antes da devolução o original pode estar, para os dois formarem par. */
+const TOLERANCIA_DEVOLUCAO = 0.10;
+const DIAS_DEVOLUCAO = 31;
 const VALORES_TRANSPORTE = [5, 6, 1.5];
 
 /* A primeira regra que casa vence, então as específicas vêm antes. */
@@ -178,28 +183,44 @@ function interno(reg) {
 /* Remove a reversão junto com o lançamento original. Deixar só um dos lados
    infla entrada ou saída. O que sobra sem par pode ser devolução parcial.
    Roda sobre o arquivo inteiro, porque a devolução pode cair no mês seguinte ao
-   do pagamento original, e nesse caso os dois saem, cada um do seu mês. O par
-   escolhido é o original mais próximo antes da devolução. */
+   do pagamento original, e nesse caso os dois saem, cada um do seu mês.
+
+   O par é procurado em duas passadas. Primeiro o valor exato; depois, se não
+   houver, um valor que difira em até 10 centavos, porque o banco às vezes
+   devolve 1 centavo a menos (entrou R$ 2.384,71 e voltou R$ 2.384,70). Nesse
+   segundo caso a diferença fica como um lançamento próprio de centavos, para o
+   total do mês continuar batendo com o saldo do banco. Em qualquer caso vale o
+   original mais próximo antes da devolução, com no máximo 31 dias. */
 function tirarEstornos(regs) {
   const fora = new Set();
   const orfaos = [];
-  const dia = r => Number(ordena(r));
-  regs.forEach((reg, i) => {
-    if (!semAcento(reg.hist).includes('devolvid') || fora.has(i)) return;
+  const sobras = [];
+  const dias = r => { const [d, m, a] = r.data.split('/').map(Number); return Date.UTC(a, m - 1, d) / 86400000; };
+  const procura = (reg, i, tolerancia) => {
     let par = -1, melhor = Infinity;
     for (let j = 0; j < regs.length; j++) {
       if (j === i || fora.has(j)) continue;
       const o = regs[j];
       if (semAcento(o.hist).includes('devolvid')) continue;
-      if (o.desc === reg.desc && Math.abs(Math.abs(o.valor) - Math.abs(reg.valor)) < 0.005 && o.valor * reg.valor < 0) {
-        const distancia = dia(reg) - dia(o);
-        if (distancia >= 0 && distancia < melhor) { melhor = distancia; par = j; }
-      }
+      if (o.desc !== reg.desc || o.valor * reg.valor >= 0) continue;
+      if (Math.abs(Math.abs(o.valor) - Math.abs(reg.valor)) > tolerancia) continue;
+      const distancia = dias(reg) - dias(o);
+      if (distancia >= 0 && distancia <= DIAS_DEVOLUCAO && distancia < melhor) { melhor = distancia; par = j; }
     }
+    return par;
+  };
+  regs.forEach((reg, i) => {
+    if (!semAcento(reg.hist).includes('devolvid') || fora.has(i)) return;
+    let par = procura(reg, i, 0.005);
+    if (par < 0) par = procura(reg, i, TOLERANCIA_DEVOLUCAO + 0.005);
     if (par < 0) { orfaos.push(reg); return; }
     fora.add(i); fora.add(par);
+    const resto = arred(regs[par].valor + reg.valor);
+    if (Math.abs(resto) >= 0.005) {
+      sobras.push({ data: reg.data, hist: 'Sobra de devolução', desc: reg.desc, valor: resto, banco: reg.banco, sobra: true });
+    }
   });
-  return { limpos: regs.filter((_, i) => !fora.has(i)), removidos: fora.size, orfaos };
+  return { limpos: regs.filter((_, i) => !fora.has(i)).concat(sobras), removidos: fora.size, orfaos };
 }
 
 function categorizar(reg) {
@@ -241,24 +262,44 @@ function parcialAte(base, chave) {
   return Number(d) < fimDoMes ? base.ultimoDia.slice(0, 5) : '';
 }
 
+/* Devolução sem par: a Isabella diz o que ela é, e a escolha fica guardada pela
+   chave do lançamento. "empresa" é devolução de um pagamento da empresa, que não
+   é venda nem despesa nova; "pessoal" é dinheiro ligado à conta pessoal, que vai
+   para a tabela dos pix pessoais; "manter" só confirma a classificação de sempre. */
+const DESTINOS_DEVOLUCAO = {
+  empresa: 'Devolução de pagamento da empresa',
+  pessoal: 'Ligada à conta pessoal',
+  manter: 'Deixar como está',
+};
+const chaveDevolucao = r => [r.data, r.desc, arred(r.valor)].join('|');
+
 /* Monta o painel de um mês a partir do extrato preparado. As categorias que a
    Isabella escolheu à mão valem mais do que qualquer regra. */
-function painelDoMes(base, chave, aprendidas = {}) {
+function painelDoMes(base, chave, aprendidas = {}, resolucoes = {}) {
   const doMes = base.registros.filter(r => chaveDoRegistro(r) === chave);
+  const chavesOrfas = new Set(base.orfaos.map(chaveDevolucao));
   const saidas = [], entradas = [], pessoal = [];
   for (const reg of doMes) {
     const item = { data: reg.data, desc: reg.desc, hist: reg.hist, valor: arred(Math.abs(reg.valor)) };
     const alvo = semAcento(reg.desc);
-    if (CONTA_PESSOAL.some(n => alvo.includes(n))) {
+    const destino = chavesOrfas.has(chaveDevolucao(reg)) ? resolucoes[chaveDevolucao(reg)] : '';
+    if (destino === 'pessoal') {
+      item.sentido = reg.valor < 0 ? 'saida' : 'entrada';
+      item.nota = 'Devolução ligada à conta pessoal';
+      pessoal.push(item);
+    } else if (destino === 'empresa') {
+      if (reg.valor < 0) { item.cat = 'Devolução'; saidas.push(item); }
+      else { item.via = 'pix'; item.obs = 'Devolução'; entradas.push(item); }
+    } else if (CONTA_PESSOAL.some(n => alvo.includes(n))) {
       item.sentido = reg.valor < 0 ? 'saida' : 'entrada';
       pessoal.push(item);
     } else if (reg.valor < 0) {
-      item.cat = aprendidas[item.desc] || categorizar(reg);
+      item.cat = reg.sobra ? 'Devolução' : (aprendidas[item.desc] || categorizar(reg));
       saidas.push(item);
     } else {
-      let cat = categorizar(reg);
+      let cat = reg.sobra ? SOBRA_DEVOLUCAO : categorizar(reg);
       item.via = 'pix';
-      if (REGRA_EMPRESA.test(alvo)) {
+      if (REGRA_EMPRESA.test(alvo) && !reg.sobra) {
         // Entrando com o nome da empresa, o banco diz de onde veio. Do C6 é cliente
         // pagando no cartão pelo link; do Cora é dinheiro da própria empresa voltando.
         // Sem o código do banco, como no CSV antigo, vale a regra de sempre: C6.
@@ -277,12 +318,15 @@ function painelDoMes(base, chave, aprendidas = {}) {
   const naoReceita = entradas.filter(i => i.obs);
   const noCartao = entradas.filter(i => i.via === 'cartao');
   const [ano, mesNum] = chave.split('-');
-  const orfaos = base.orfaos.filter(o => chaveDoRegistro(o) === chave);
+  const doMesOrfaos = base.orfaos.filter(o => chaveDoRegistro(o) === chave)
+    .map(o => ({ ...o, chave: chaveDevolucao(o), destino: resolucoes[chaveDevolucao(o)] || '' }));
+  const orfaos = doMesOrfaos.filter(o => !o.destino);
+  const conferidas = doMesOrfaos.filter(o => o.destino);
 
   return {
     chave, mes: nomeDoMes(chave), ano: Number(ano), mesNum: Number(mesNum),
     parcial: parcialAte(base, chave),
-    cats: CATEGORIAS, saidas, entradas, pessoal, orfaos,
+    cats: CATEGORIAS, saidas, entradas, pessoal, orfaos, conferidas,
     totais: {
       entradas: soma(entradas), saidas: soma(saidas),
       receitaCliente: arred(soma(entradas) - soma(naoReceita)), receitaCartao: soma(noCartao),
@@ -442,5 +486,5 @@ function recebidoDe(nome, entradas) {
 if (typeof module !== 'undefined') {
   module.exports = { processarExtrato, prepararExtrato, painelDoMes, lerPlanilha, vendasDoMes,
     resumoAnual, parceirosPorMes, recebidoDe, mesAnterior, categorizar, CATEGORIAS, MESES,
-    arred, semAcento, chaveDe, nomeDoMes };
+    arred, semAcento, chaveDe, nomeDoMes, DESTINOS_DEVOLUCAO };
 }

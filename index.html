@@ -56,6 +56,30 @@ h1{font-family:"Fraunces",Georgia,serif;font-weight:600;font-size:clamp(28px,5vw
 .aviso.erro{color:var(--saida);border-color:var(--saida);background:#F7EFEE}
 .aviso.ok{color:var(--entrada);border-color:var(--entrada);background:#EDF3F1}
 .aviso.atencao{color:var(--neutro);border-color:var(--neutro);background:#F7F2E4}
+#aviso{display:flex;align-items:flex-start;gap:12px}
+#aviso.escondido{display:none}
+#aviso span{flex:1}
+.aviso .fechar{background:none;border:none;color:inherit;font-size:20px;line-height:1;
+  padding:0 2px;cursor:pointer;opacity:.7}
+.aviso .fechar:hover{opacity:1}
+/* a caixa do arquivo que falta chama atenção no lugar de um aviso em cada mês */
+/* devoluções sem par */
+#caixaDevolucoes{display:flex;flex-direction:column;gap:8px}
+#caixaDevolucoes.escondido{display:none}
+.devolucao-titulo{margin:0 0 2px}
+.devolucao{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;
+  border-top:1px solid rgba(138,107,31,.25);padding-top:8px}
+.devolucao-texto{flex:1 1 260px;color:var(--tinta)}
+.devolucao select{border:1px solid var(--neutro);background:var(--papel-alto);color:var(--tinta);
+  font-style:normal;padding:6px 8px}
+.conferidas{font-size:12.5px;color:var(--tinta-fraca);margin:-6px 0 16px;display:flex;flex-direction:column;gap:6px}
+.conferidas.escondido{display:none}
+.conferidas > span{display:inline}
+.conferidas .devolucao{border-top-color:var(--hairline)}
+.solta.falta{border-color:var(--neutro);border-style:dashed;background:#F7F2E4}
+.solta.falta .titulo{color:var(--neutro)}
+.solta .pedido{display:none;font-size:13px;color:var(--neutro);font-weight:500;margin-top:6px}
+.solta.falta .pedido{display:block}
 
 /* abas */
 .barra-abas{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between;
@@ -287,6 +311,7 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
       <span class="titulo">1 &middot; Extrato do Inter</span>
       <span class="ajuda">Arraste aqui ou clique para escolher. Aceita .csv e .ofx, baixados direto do Inter.</span>
       <span class="arquivo" id="nomeExtrato"></span>
+      <span class="pedido">Falta este arquivo para ver as despesas e fechar a conciliação.</span>
       <input type="file" id="arqExtrato" accept=".csv,.ofx,.txt">
     </label>
     <label class="solta" id="zonaPlanilha">
@@ -302,7 +327,10 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
     <button type="button" class="link" id="btnEsquecer">esquecer estes dados</button>
   </p>
 
-  <p class="aviso escondido" id="aviso"></p>
+  <div class="aviso escondido" id="aviso" role="status">
+    <span id="avisoTexto"></span>
+    <button type="button" class="fechar" id="avisoFechar" aria-label="Fechar aviso">&times;</button>
+  </div>
 
   <nav class="abas-meses" id="abasMeses" role="tablist" aria-label="Mês"></nav>
 
@@ -356,7 +384,9 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
       </div>
     </section>
     <p class="rodape-carimbos" id="rodape"></p>
-    <p class="aviso atencao escondido" id="avisoMes"></p>
+    <p class="aviso atencao escondido" id="avisoParcial"></p>
+    <div class="aviso atencao escondido" id="caixaDevolucoes"></div>
+    <div class="conferidas escondido" id="conferidas"></div>
 
     <section>
       <h2>Despesas por categoria</h2>
@@ -415,7 +445,7 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
       <div class="carimbo">
         <span class="rotulo">Diferença entre os dois</span>
         <span class="cifra" id="kDif">&mdash;</span>
-        <span class="nota">Explicada passo a passo logo abaixo</span>
+        <span class="nota" id="kDifNota">Explicada passo a passo logo abaixo</span>
       </div>
       <div class="carimbo vermelho">
         <span class="rotulo">A receber de parceiros</span>

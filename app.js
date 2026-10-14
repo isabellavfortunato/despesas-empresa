@@ -17,6 +17,8 @@ const estado = {
   planilha: null,      // linhas do Status clientes
   problemas: [],       // linhas da planilha com data de aprovação ilegível
   categorias: {},      // escolhas feitas à mão: favorecido -> categoria
+  resolucoes: {},      // devoluções sem par já conferidas: lançamento -> destino
+  revendo: false,      // lista das devoluções conferidas aberta para mudar
   mesSel: null,        // 'AAAA-MM'
   painel: null,        // o mês escolhido, montado a partir de base
   vendas: null, vendasAnteriores: null, mesAnterior: null,
@@ -25,13 +27,19 @@ const estado = {
 
 /* ---------- avisos ---------- */
 let relogioAviso = null;
+/* Os avisos de confirmação somem sozinhos; os de atenção e de erro ficam até a
+   pessoa fechar no x. */
 function avisar(texto, tipo = 'ok', fixo = false) {
   const caixa = el('aviso');
-  caixa.textContent = texto;
+  el('avisoTexto').textContent = texto;
   caixa.className = 'aviso ' + tipo;
   clearTimeout(relogioAviso);
   if (!fixo) relogioAviso = setTimeout(() => caixa.classList.add('escondido'), 7000);
 }
+el('avisoFechar').addEventListener('click', () => {
+  clearTimeout(relogioAviso);
+  el('aviso').classList.add('escondido');
+});
 
 /* ---------- memória do navegador ----------
    O que você carrega fica guardado nesta máquina, para a página já abrir com os
@@ -43,6 +51,7 @@ const BAU = {
   problemas: 'financeiro-ift-problemas-planilha',
   nomes: 'financeiro-ift-nomes',
   categorias: 'financeiro-ift-categorias',
+  devolucoes: 'financeiro-ift-devolucoes',
   mes: 'financeiro-ift-mes',
   aba: 'financeiro-ift-aba',
 };
@@ -105,6 +114,7 @@ function migrarCategoriasAntigas() {
 function recuperarDados() {
   estado.nomes = ler(BAU.nomes) || {};
   estado.categorias = ler(BAU.categorias) || {};
+  estado.resolucoes = ler(BAU.devolucoes) || {};
   migrarCategoriasAntigas();
 
   const base = ler(BAU.extrato);
@@ -114,7 +124,7 @@ function recuperarDados() {
   } else if (base) {
     // Guardado por uma versão antiga, que só mantinha um mês. Não dá para aproveitar.
     try { localStorage.removeItem(BAU.extrato); } catch (e) { /* nada a fazer */ }
-    avisar('A página agora trabalha com todos os meses do extrato. Carregue o extrato do Inter de novo, de preferência do ano inteiro. As categorias que você corrigiu foram mantidas.', 'atencao', true);
+    avisar('Esta versão separa o extrato por mês, e o extrato guardado pela versão anterior não serve mais. Carregue o extrato do Inter mais uma vez, de preferência do ano inteiro. As categorias que você corrigiu continuam guardadas.', 'atencao', true);
   }
   const planilha = ler(BAU.planilha);
   if (Array.isArray(planilha) && planilha.length) {
@@ -251,7 +261,7 @@ function escolherMes(chave) {
 function montarMes() {
   const k = estado.mesSel;
   estado.painel = estado.base && estado.base.meses.includes(k)
-    ? painelDoMes(estado.base, k, estado.categorias)
+    ? painelDoMes(estado.base, k, estado.categorias, estado.resolucoes)
     : null;
   const [ano, mes] = k.split('-').map(Number);
   estado.ref = { ano, mes };
@@ -282,7 +292,9 @@ function desenharAbasMeses() {
       const s = document.createElement('small');
       s.textContent = 'até ' + parcial;
       b.appendChild(s);
-    } else if (!temExtrato) {
+    } else if (!temExtrato && estado.base) {
+      // Só marca o mês sem extrato quando existe extrato; sem nenhum, a caixa do
+      // arquivo já pede o extrato, e a marca em todos os meses seria repetição.
       const s = document.createElement('small');
       s.textContent = 'só planilha';
       b.appendChild(s);
@@ -312,10 +324,16 @@ function habilitar() {
   el('btnImprimir').disabled = !estado.mesSel;
   if (estado.aba === 'mes' && !estado.painel) trocarAba('vendas', false);
   else trocarAba(estado.aba, false);
-  el('semExtrato').classList.toggle('escondido', !!estado.painel || !estado.mesSel);
-  if (!estado.painel && estado.mesSel) {
-    el('semExtrato').textContent = 'Não há extrato carregado com lançamentos de ' + nomeDoMes(estado.mesSel) +
-      ', então a aba Despesas fica fechada neste mês. A conciliação mostra o que dá para ver só com a planilha.';
+  // Sem extrato nenhum, quem pede o arquivo é a própria caixa de carregar. O aviso
+  // amarelo só aparece quando há extrato, mas ele não cobre o mês escolhido.
+  el('zonaExtrato').classList.toggle('falta', !estado.base && !!estado.planilha);
+  const faltaMes = !!estado.base && !estado.painel && !!estado.mesSel;
+  el('semExtrato').classList.toggle('escondido', !faltaMes);
+  if (faltaMes) {
+    const m = estado.base.meses;
+    el('semExtrato').textContent = 'O extrato carregado vai de ' + nomeDoMes(m[0]) + ' a ' + nomeDoMes(m[m.length - 1]) +
+      ' e não tem ' + nomeDoMes(estado.mesSel) + '. Para ver as despesas deste mês, baixe no Inter um extrato que inclua ' +
+      MES_CURTO[Number(estado.mesSel.slice(5)) - 1] + '.';
   }
 }
 
@@ -377,15 +395,10 @@ function desenharMes() {
     ' e saiu ' + brl(T.saidas + T.pessoalIda) + ' somando despesas e conta pessoal, então o mês fechou em ' +
     brl(saldo) + '.';
 
-  // Devolução sem par e mês incompleto ficam visíveis dentro do próprio mês.
-  const avisos = [];
-  if (P.parcial) avisos.push('O extrato termina em ' + P.parcial + ', então ' + P.mes + ' ainda está incompleto.');
-  if (P.orfaos.length) {
-    avisos.push('Devolução sem par de mesmo valor, que pode ser devolução parcial ou de um pagamento fora do extrato. Não abati nada sozinho: ' +
-      P.orfaos.map(o => o.desc + ' em ' + o.data + ', ' + brl(Math.abs(o.valor))).join('; ') + '.');
-  }
-  el('avisoMes').textContent = avisos.join(' ');
-  el('avisoMes').classList.toggle('escondido', !avisos.length);
+  // Mês incompleto e devolução sem par ficam visíveis dentro do próprio mês.
+  el('avisoParcial').textContent = P.parcial ? 'O extrato termina em ' + P.parcial + ', então ' + P.mes + ' ainda está incompleto.' : '';
+  el('avisoParcial').classList.toggle('escondido', !P.parcial);
+  desenharDevolucoes(P);
 
   el('notaFim').textContent = 'Foram excluídos cofrinho, CDB, aplicações e resgates, por serem movimentação dentro da própria conta. ' +
     'Os pares de estorno saíram dos dois lados para não inflar entradas nem saídas, mesmo quando a devolução caiu em outro mês. ' +
@@ -394,6 +407,75 @@ function desenharMes() {
     'vindo do Cora, é dinheiro da própria empresa voltando, e não conta como venda.';
 
   grafico(); tabelaSaidas(el('buscaSaida').value); tabelaPessoal();
+}
+
+/* ---------- devoluções sem par ----------
+   Cada devolução sem par ganha um seletor dentro do aviso amarelo. Escolhido o
+   destino, o aviso daquela devolução some e a conta do mês se refaz. As já
+   conferidas ficam numa linha discreta, com um botão para rever a escolha. */
+function linhaDevolucao(o) {
+  const linha = document.createElement('div');
+  linha.className = 'devolucao';
+  const texto = document.createElement('span');
+  texto.className = 'devolucao-texto';
+  const sentido = o.valor < 0 ? 'saiu da empresa' : 'entrou na empresa';
+  texto.textContent = o.data + ' · ' + o.desc + ' · ' + brl(Math.abs(o.valor)) + ', ' + sentido;
+  const sel = document.createElement('select');
+  sel.setAttribute('aria-label', 'O que é a devolução de ' + o.desc + ' em ' + o.data);
+  const vazio = document.createElement('option');
+  vazio.value = ''; vazio.textContent = 'O que é esta devolução?';
+  sel.appendChild(vazio);
+  for (const [valor, rotulo] of Object.entries(DESTINOS_DEVOLUCAO)) {
+    const op = document.createElement('option');
+    op.value = valor; op.textContent = rotulo;
+    if (o.destino === valor) op.selected = true;
+    sel.appendChild(op);
+  }
+  sel.addEventListener('change', e => {
+    if (e.target.value) estado.resolucoes[o.chave] = e.target.value;
+    else delete estado.resolucoes[o.chave];
+    gravar(BAU.devolucoes, estado.resolucoes);
+    montarMes();
+    desenharMes();
+    desenharVendas();
+    avisar(e.target.value ? 'Devolução marcada como "' + DESTINOS_DEVOLUCAO[e.target.value] + '".' : 'Devolução voltou para a lista de pendentes.', 'ok');
+  });
+  const noPapel = document.createElement('span');
+  noPapel.className = 'cat-papel';
+  noPapel.textContent = o.destino ? DESTINOS_DEVOLUCAO[o.destino] : 'a conferir';
+  linha.append(texto, sel, noPapel);
+  return linha;
+}
+
+function desenharDevolucoes(P) {
+  const caixa = el('caixaDevolucoes');
+  caixa.innerHTML = '';
+  if (P.orfaos.length) {
+    const titulo = document.createElement('p');
+    titulo.className = 'devolucao-titulo';
+    titulo.textContent = plural(P.orfaos.length, ' devolução sem par', ' devoluções sem par') +
+      ' neste mês. Pode ser devolução parcial, de um pagamento fora do extrato ou ligada à sua conta pessoal. ' +
+      'Escolha o que cada uma é para tirar o aviso.';
+    caixa.appendChild(titulo);
+    for (const o of P.orfaos) caixa.appendChild(linhaDevolucao(o));
+  }
+  caixa.classList.toggle('escondido', !P.orfaos.length);
+
+  const conf = el('conferidas');
+  conf.innerHTML = '';
+  conf.classList.toggle('escondido', !P.conferidas.length);
+  if (!P.conferidas.length) return;
+  const resumo = document.createElement('span');
+  resumo.textContent = plural(P.conferidas.length, ' devolução conferida', ' devoluções conferidas') + ' por você neste mês.';
+  const botao = document.createElement('button');
+  botao.type = 'button';
+  botao.className = 'link';
+  botao.textContent = estado.revendo ? 'fechar' : 'rever';
+  botao.addEventListener('click', () => { estado.revendo = !estado.revendo; desenharDevolucoes(estado.painel); });
+  const topo = document.createElement('div');
+  topo.append(resumo, ' ', botao);
+  conf.appendChild(topo);
+  if (estado.revendo) for (const o of P.conferidas) conf.appendChild(linhaDevolucao(o));
 }
 
 function nomeMes(ref) {
@@ -579,7 +661,9 @@ function tabelaPessoal() {
     const tr = document.createElement('tr');
     const a = document.createElement('td'); a.className = 'data'; a.textContent = l.data;
     const b = document.createElement('td');
-    b.textContent = l.sentido === 'saida' ? 'Enviado para a conta pessoal' : 'Devolvido para a empresa';
+    b.textContent = l.nota
+      ? l.nota + ', ' + l.desc + (l.sentido === 'saida' ? ', saiu da empresa' : ', entrou na empresa')
+      : (l.sentido === 'saida' ? 'Enviado para a conta pessoal' : 'Devolvido para a empresa');
     const c = document.createElement('td');
     c.className = 'valor ' + (l.sentido === 'saida' ? 'menos' : 'mais');
     c.textContent = (l.sentido === 'saida' ? '− ' : '+ ') + brl(l.valor);
@@ -593,7 +677,7 @@ el('buscaSaida').addEventListener('input', e => { if (estado.painel) tabelaSaida
 el('buscaEnt').addEventListener('input', e => { if (estado.painel) tabelaEntradas(e.target.value); });
 
 el('btnSalvar').addEventListener('click', () => {
-  const conteudo = JSON.stringify({ categorias: estado.categorias }, null, 2);
+  const conteudo = JSON.stringify({ categorias: estado.categorias, devolucoes: estado.resolucoes }, null, 2);
   const blob = new Blob([conteudo], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -615,6 +699,11 @@ el('arqCategorias').addEventListener('change', evento => {
       const novas = filtrarEscolhas(lido.categorias || lido);
       Object.assign(estado.categorias, novas);
       gravar(BAU.categorias, estado.categorias);
+      // As devoluções conferidas viajam no mesmo arquivo.
+      for (const [k, v] of Object.entries(lido.devolucoes || {})) {
+        if (DESTINOS_DEVOLUCAO[v]) estado.resolucoes[k] = v;
+      }
+      gravar(BAU.devolucoes, estado.resolucoes);
       if (estado.painel) { montarMes(); desenharMes(); }
       avisar(plural(Object.keys(novas).length, ' favorecido recuperado.', ' favorecidos recuperados.'), 'ok');
     } catch (e) {
@@ -685,6 +774,7 @@ function desenharVendas() {
       ', para entrar no caixa do mês seguinte';
     el('kRodape').textContent = 'Conciliação de ' + rotuloMes(P) +
       '. Venda é o que foi fechado com o cliente, entrada é o que o banco recebeu, e a diferença tem explicação, não é erro.';
+    el('kDifNota').textContent = 'Explicada passo a passo logo abaixo';
     el('secaoPonte').classList.remove('escondido');
     ponte();
   } else {
@@ -707,6 +797,7 @@ function desenharVendas() {
       el('kEntNota').textContent = estado.base ? 'O extrato carregado não tem este mês' : 'Carregue o extrato do Inter';
     }
     el('kRodape').textContent = 'A conciliação precisa do extrato e da planilha do mesmo mês. Abaixo, o que dá para ver com o que foi carregado.';
+    el('kDifNota').textContent = 'Aparece quando houver extrato e planilha deste mês';
     el('secaoPonte').classList.add('escondido');
   }
 
@@ -811,7 +902,7 @@ function tabelaParceiros() {
   corpo.innerHTML = '';
   const seguinte = mes === 12 ? chaveDe(ano + 1, 1) : chaveDe(ano, mes + 1);
   const temSeguinte = estado.base && estado.base.meses.includes(seguinte);
-  const entradas = temSeguinte ? painelDoMes(estado.base, seguinte, estado.categorias).entradas : null;
+  const entradas = temSeguinte ? painelDoMes(estado.base, seguinte, estado.categorias, estado.resolucoes).entradas : null;
   el('thEncontrado').textContent = 'Encontrado em ' + MES_CURTO[Number(seguinte.slice(5)) - 1];
 
   for (const p of lista) {
