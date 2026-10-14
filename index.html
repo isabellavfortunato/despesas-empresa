@@ -41,6 +41,11 @@ h1{font-family:"Fraunces",Georgia,serif;font-weight:600;font-size:clamp(28px,5vw
 .solta .arquivo{font-size:13.5px;display:block;margin-top:5px;word-break:break-all}
 .solta input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
 
+.memoria{font-size:12.5px;color:var(--tinta-fraca);margin:0 0 14px;display:flex;gap:10px;
+  align-items:baseline;flex-wrap:wrap}
+.link{background:none;border:none;padding:0;font:inherit;color:var(--carimbo);
+  text-decoration:underline;cursor:pointer}
+.link:hover{color:var(--tinta)}
 .aviso{font-size:13px;padding:10px 13px;border-radius:3px;margin:0 0 16px;border:1px solid}
 .aviso.erro{color:var(--saida);border-color:var(--saida);background:#F7EFEE}
 .aviso.ok{color:var(--entrada);border-color:var(--entrada);background:#EDF3F1}
@@ -165,7 +170,7 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
   .folha{max-width:none;padding:0}
 
   /* fora do papel: tudo que só serve para operar a página */
-  .cabecalho,.entrada-arquivos,.aviso,.barra-abas,.ferramentas,.escondido{display:none!important}
+  .cabecalho,.entrada-arquivos,.aviso,.memoria,.barra-abas,.ferramentas,.escondido{display:none!important}
   select{display:none!important}
 
   .so-papel{display:block;border-bottom:2px solid var(--tinta);padding-bottom:12px;margin-bottom:18px}
@@ -239,6 +244,11 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
       <input type="file" id="arqPlanilha" accept=".xlsx,.xlsm">
     </label>
   </div>
+
+  <p class="memoria escondido" id="memoria">
+    <span id="memoriaTexto"></span>
+    <button type="button" class="link" id="btnEsquecer">esquecer estes dados</button>
+  </p>
 
   <p class="aviso escondido" id="aviso"></p>
 

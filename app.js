@@ -4,7 +4,7 @@ const brl = v => (v || 0).toLocaleString('pt-BR', { style: 'currency', currency:
 const el = id => document.getElementById(id);
 const plural = (q, um, muitos) => q + (q === 1 ? um : muitos);
 
-const estado = { painel: null, planilha: null, vendas: null, aba: 'mes' };
+const estado = { painel: null, planilha: null, vendas: null, aba: 'mes', nomes: {} };
 
 /* ---------- avisos ---------- */
 let relogioAviso = null;
@@ -28,6 +28,7 @@ function mapaAtual() {
 }
 function guardar() {
   try { localStorage.setItem(chaveLocal(), JSON.stringify(mapaAtual())); } catch (e) { /* janela anônima */ }
+  guardarDados();
 }
 function lerGuardado(mes) {
   try {
@@ -43,6 +44,74 @@ function aplicarMapa(mapa) {
   return n;
 }
 
+/* ---------- memória do navegador ----------
+   O que você carrega fica guardado nesta máquina, para a página já abrir com os
+   dados do último uso. Nada disso vai para o GitHub nem para servidor nenhum:
+   mora apenas neste navegador, e o botão de esquecer apaga tudo. */
+const BAU = {
+  extrato: 'financeiro-ift-dados-extrato',
+  planilha: 'financeiro-ift-dados-planilha',
+  nomes: 'financeiro-ift-nomes',
+};
+
+function guardarDados() {
+  try {
+    if (estado.painel) localStorage.setItem(BAU.extrato, JSON.stringify(estado.painel));
+    if (estado.planilha) localStorage.setItem(BAU.planilha, JSON.stringify(estado.planilha));
+    localStorage.setItem(BAU.nomes, JSON.stringify(estado.nomes));
+  } catch (e) {
+    // Janela anônima ou armazenamento cheio: a página segue funcionando sem memória.
+    avisar('Não consegui guardar os dados neste navegador, então eles valem só enquanto a página estiver aberta. Costuma acontecer em janela anônima.', 'atencao');
+  }
+}
+
+function recuperarDados() {
+  try {
+    const nomes = localStorage.getItem(BAU.nomes);
+    if (nomes) estado.nomes = JSON.parse(nomes);
+    const extrato = localStorage.getItem(BAU.extrato);
+    if (extrato) {
+      estado.painel = JSON.parse(extrato);
+      marcarZona('zonaExtrato', 'nomeExtrato', estado.nomes.extrato);
+    }
+    const planilha = localStorage.getItem(BAU.planilha);
+    if (planilha) {
+      estado.planilha = JSON.parse(planilha);
+      marcarZona('zonaPlanilha', 'nomePlanilha', estado.nomes.planilha);
+    }
+  } catch (e) { /* dado corrompido: começa do zero */ }
+
+  if (!estado.painel && !estado.planilha) return;
+  casarVendas();
+  if (estado.painel) desenharMes();
+  if (estado.planilha) desenharVendas();
+  habilitar();
+  mostrarMemoria();
+}
+
+function marcarZona(idZona, idNome, nomeArquivo) {
+  if (!nomeArquivo) return;
+  el(idZona).classList.add('pronto');
+  el(idNome).textContent = nomeArquivo;
+}
+
+function mostrarMemoria() {
+  const partes = [];
+  if (estado.painel) partes.push('extrato de ' + estado.painel.mes);
+  if (estado.planilha) partes.push('planilha com ' + estado.planilha.length + ' orçamentos');
+  if (!partes.length) { el('memoria').classList.add('escondido'); return; }
+  el('memoriaTexto').textContent = 'Guardado neste navegador: ' + partes.join(' e ') +
+    '. Carregar um arquivo novo substitui o anterior.';
+  el('memoria').classList.remove('escondido');
+}
+
+el('btnEsquecer').addEventListener('click', () => {
+  for (const chave of Object.values(BAU)) {
+    try { localStorage.removeItem(chave); } catch (e) { /* nada a fazer */ }
+  }
+  location.reload();
+});
+
 /* ---------- carregar arquivos ---------- */
 function ligarZona(idZona, idInput, aoLer, comoTexto) {
   const zona = el(idZona), entrada = el(idInput);
@@ -54,6 +123,9 @@ function ligarZona(idZona, idInput, aoLer, comoTexto) {
         aoLer(arquivo.name, leitor.result);
         zona.classList.add('pronto');
         zona.querySelector('.arquivo').textContent = arquivo.name;
+        estado.nomes[idZona === 'zonaExtrato' ? 'extrato' : 'planilha'] = arquivo.name;
+        guardarDados();
+        mostrarMemoria();
       } catch (erro) {
         zona.classList.remove('pronto');
         avisar('Não consegui ler ' + arquivo.name + '. ' + erro.message, 'erro', true);
@@ -545,3 +617,6 @@ function barrasRegime() {
     .sort((a, b) => b.valor - a.valor);
   barras('barrasRegime', itens, true);
 }
+
+/* Ao abrir, a página volta ao estado do último uso nesta máquina. */
+recuperarDados();

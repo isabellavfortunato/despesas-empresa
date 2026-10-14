@@ -4,6 +4,8 @@ Painel financeiro mensal e acompanhamento de vendas da Isabella Fortunato Tradu�
 
 A página roda inteira no navegador. O extrato e a planilha são lidos na própria máquina de quem abre, nada é enviado para servidor nenhum e nada fica guardado neste repositório. Por isso o repositório pode ser público sem expor qualquer dado financeiro.
 
+O que foi carregado fica guardado no próprio navegador, então ao reabrir a página os dados do último uso já aparecem, sem precisar carregar de novo. Essa memória vale por navegador e por computador: abrindo em outra máquina ou no celular, a página começa vazia e é preciso carregar os arquivos ali também. O botão **esquecer estes dados**, no alto da página, apaga tudo.
+
 ## Como usar
 
 1. Abrir a página.
@@ -11,6 +13,8 @@ A página roda inteira no navegador. O extrato e a planilha são lidos na própr
 3. Soltar a planilha Status clientes na segunda caixa. É o arquivo .xlsx com as abas dos meses.
 
 A aba **Mês** mostra o painel do mês do extrato. A aba **Vendas** mostra o ano inteiro e só precisa da planilha.
+
+Da segunda vez em diante só é preciso soltar os arquivos quando houver mês novo. Carregar um arquivo substitui o anterior.
 
 ## O que a página calcula
 
