@@ -12,15 +12,15 @@ O que foi carregado fica guardado no próprio navegador, então ao reabrir a pá
 2. Soltar o extrato do Banco Inter na primeira caixa. Aceita CSV e OFX.
 3. Soltar a planilha Status clientes na segunda caixa. É o arquivo .xlsx com as abas dos meses.
 
-A aba **Mês** mostra o painel do mês do extrato. A aba **Vendas** mostra o ano inteiro e só precisa da planilha.
+A aba **Despesas** mostra os números do mês e para onde o dinheiro foi. A aba **Conciliação** compara o que foi vendido com o que entrou na conta.
 
 Da segunda vez em diante só é preciso soltar os arquivos quando houver mês novo. Carregar um arquivo substitui o anterior.
 
 ## O que a página calcula
 
-**Mês.** Vendas fechadas, dinheiro que entrou, saídas para terceiros, pix para a conta pessoal e o resultado. Abaixo, a conciliação que explica por que a venda e a entrada não são o mesmo número, o resumo de saídas por categoria e as três tabelas de lançamentos.
+**Despesas.** Cinco números no alto: quanto entrou, quanto foi vendido no mês, quanto foi vendido no mês anterior com a variação, quanto saiu em despesas e quanto foi para a conta pessoal. Abaixo, o gráfico de barras horizontal das categorias de despesa, com o valor e a fatia do mês ao passar o mouse. Em seguida a lista de despesas, cada uma com um seletor para corrigir a categoria, e a tabela dos pix para a conta pessoal.
 
-**Vendas.** Vendas mês a mês pela data de aprovação, parceiros a receber no mês escolhido e como cada venda do mês vira dinheiro conforme o regime de pagamento.
+**Conciliação.** Vendido no mês contra o que entrou na conta, a diferença entre os dois e o que está a receber de parceiros. Abaixo, a conciliação passo a passo que explica a diferença, as entradas linha a linha, os parceiros a receber no mês escolhido e as vendas mês a mês do ano.
 
 ## As regras embutidas
 
@@ -38,13 +38,13 @@ A taxa de cartório fica fora da venda, por ser repasse ao notário, e o Correio
 
 O botão **Imprimir relatório**, ao lado das abas, monta a versão de papel com as duas telas juntas, independentemente de qual estiver aberta. Na janela de impressão do navegador, escolha **Salvar como PDF** no lugar da impressora.
 
-Por padrão o relatório sai resumido, em quatro páginas: capa com o mês, os cinco cards, a conciliação entre venda e entrada, as saídas por categoria, as vendas mês a mês, os parceiros a receber e como cada venda vira dinheiro. Marcando **incluir as tabelas completas** antes de imprimir, entram também as três tabelas de lançamentos, linha a linha, o que leva o documento a cerca de catorze páginas.
+Por padrão o relatório sai resumido, em quatro páginas: capa com o mês, os cinco números, o gráfico de despesas por categoria, a conciliação passo a passo, os parceiros a receber e as vendas mês a mês. Marcando **incluir as tabelas completas** antes de imprimir, entram também as três tabelas de lançamentos, linha a linha, o que leva o documento a cerca de catorze páginas.
 
 As caixas de carregar arquivo, as abas, os campos de busca e os seletores de categoria não vão para o papel. A categoria de cada saída aparece como texto no lugar do seletor.
 
 ## Categorias
 
-Só as saídas têm campo de categoria. Trocar a categoria de um favorecido muda todos os lançamentos dele de uma vez, e o trabalho fica guardado no navegador. O botão de salvar baixa um arquivo com as categorias definidas, e o de carregar devolve esse arquivo para dentro da página, o que serve para levar o trabalho de um computador para outro.
+Só as despesas têm campo de categoria. Trocar a categoria de um favorecido muda todos os lançamentos dele de uma vez, e o trabalho fica guardado no navegador. O botão de salvar baixa um arquivo com as categorias definidas, e o de carregar devolve esse arquivo para dentro da página, o que serve para levar o trabalho de um computador para outro.
 
 ## Arquivos
 

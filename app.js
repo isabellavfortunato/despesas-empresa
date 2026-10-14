@@ -4,7 +4,11 @@ const brl = v => (v || 0).toLocaleString('pt-BR', { style: 'currency', currency:
 const el = id => document.getElementById(id);
 const plural = (q, um, muitos) => q + (q === 1 ? um : muitos);
 
-const estado = { painel: null, planilha: null, vendas: null, aba: 'mes', nomes: {} };
+const MES_CURTO = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+
+const estado = { painel: null, planilha: null, vendas: null, vendasAnteriores: null,
+  mesAnterior: null, aba: 'mes', nomes: {} };
 
 /* ---------- avisos ---------- */
 let relogioAviso = null;
@@ -84,7 +88,7 @@ function recuperarDados() {
   if (!estado.painel && !estado.planilha) return;
   casarVendas();
   if (estado.painel) desenharMes();
-  if (estado.planilha) desenharVendas();
+  desenharVendas();
   habilitar();
   mostrarMemoria();
 }
@@ -150,6 +154,7 @@ ligarZona('zonaExtrato', 'arqExtrato', (nome, texto) => {
   aplicarMapa(lerGuardado(painel.mes));
   casarVendas();
   desenharMes();
+  desenharVendas();
   habilitar();
   const d = painel.diagnostico;
   let texto2 = 'Extrato de ' + painel.mes + ' lido: ' + d.lidos + ' lançamentos, ' +
@@ -177,13 +182,18 @@ ligarZona('zonaPlanilha', 'arqPlanilha', (nome, buffer) => {
 }, false);
 
 function casarVendas() {
-  estado.vendas = (estado.planilha && estado.painel)
-    ? vendasDoMes(estado.planilha, estado.painel.ano, estado.painel.mesNum) : null;
+  if (!estado.planilha || !estado.painel) {
+    estado.vendas = estado.vendasAnteriores = estado.mesAnterior = null;
+    return;
+  }
+  estado.vendas = vendasDoMes(estado.planilha, estado.painel.ano, estado.painel.mesNum);
+  estado.mesAnterior = mesAnterior(estado.painel.ano, estado.painel.mesNum);
+  estado.vendasAnteriores = vendasDoMes(estado.planilha, estado.mesAnterior.ano, estado.mesAnterior.mes);
 }
 
 function habilitar() {
   el('abaMes').disabled = !estado.painel;
-  el('abaVendas').disabled = !estado.planilha;
+  el('abaVendas').disabled = !estado.painel && !estado.planilha;
   el('btnImprimir').disabled = !estado.painel && !estado.planilha;
   if (estado.painel && estado.aba === 'mes') trocarAba('mes');
   else if (estado.planilha && !estado.painel) trocarAba('vendas');
@@ -203,131 +213,114 @@ el('abaVendas').addEventListener('click', () => trocarAba('vendas'));
 /* ================= TELA DO MÊS ================= */
 
 function desenharMes() {
-  const P = estado.painel, T = P.totais, V = estado.vendas;
+  const P = estado.painel, T = P.totais, V = estado.vendas, A = estado.vendasAnteriores;
   document.title = 'Financeiro IFT — ' + P.mes;
-  el('telaMes').querySelector('#cEnt');
-
-  if (V) {
-    el('cVenda').textContent = brl(V.venda);
-    el('nVenda').textContent = V.qtd + ' orçamentos aprovados na planilha';
-    el('secaoPonte').classList.remove('escondido');
-  } else {
-    el('cVenda').textContent = 'sem planilha';
-    el('nVenda').textContent = 'Carregue o Status clientes para ver as vendas do mês';
-    el('secaoPonte').classList.add('escondido');
-  }
 
   el('cEnt').textContent = brl(T.entradas);
   el('nEnt').textContent = T.qtdEntradas + ' recebimentos, ' + brl(T.receitaCartao) + ' no cartão pelo link do C6';
+
+  if (V) {
+    el('cVenda').textContent = brl(V.venda);
+    el('nVenda').textContent = V.qtd + ' orçamentos aprovados';
+  } else {
+    el('cVenda').textContent = 'sem planilha';
+    el('nVenda').textContent = 'Carregue o Status clientes para ver as vendas';
+  }
+
+  if (A) {
+    el('cVendaAnt').textContent = brl(A.venda);
+    let nota = A.qtd + ' orçamentos em ' + nomeMes(estado.mesAnterior);
+    if (V && A.venda > 0) {
+      const var_ = ((V.venda - A.venda) / A.venda) * 100;
+      const sinal = var_ >= 0 ? '+' : '\u2212';
+      nota += '. O mês atual está ' + sinal + Math.abs(var_).toFixed(1).replace('.', ',') + '%';
+    }
+    el('nVendaAnt').textContent = nota;
+  } else {
+    el('cVendaAnt').textContent = V ? 'sem dados' : '\u2014';
+    el('nVendaAnt').textContent = V ? 'A planilha não tem o mês anterior' : '';
+  }
+
   el('cSai').textContent = brl(T.saidas);
-  el('nSai').textContent = T.qtdSaidas + ' pagamentos';
+  el('nSai').textContent = T.qtdSaidas + ' pagamentos a terceiros, sem contar a conta pessoal';
   el('cPes').textContent = brl(T.pessoalIda);
-  el('nPes').textContent = T.qtdPessoalIda + ' transferências enviadas';
+  el('nPes').textContent = T.qtdPessoalIda + ' transferências enviadas, ' + brl(T.pessoalVolta) + ' devolvidos';
 
   const saldo = T.entradas + T.pessoalVolta - T.saidas - T.pessoalIda;
-  const elSaldo = el('cSaldo');
-  elSaldo.textContent = brl(saldo);
-  elSaldo.style.color = saldo < 0 ? 'var(--saida)' : 'var(--entrada)';
-
-  el('rodape').textContent = 'Movimentação de ' + P.mes + '. Saíram ' + brl(T.pessoalIda) +
-    ' para a sua conta pessoal e voltaram ' + brl(T.pessoalVolta) +
-    '. O resultado do mês já considera essas duas pontas.';
+  el('rodape').innerHTML = '';
+  el('rodape').textContent = 'Movimentação de ' + P.mes + '. Entrou ' + brl(T.entradas) +
+    ' e saiu ' + brl(T.saidas + T.pessoalIda) + ' somando despesas e conta pessoal, então o mês fechou em ' +
+    brl(saldo) + '.';
 
   el('notaFim').textContent = 'Foram excluídos cofrinho, CDB, aplicações e resgates, por serem movimentação dentro da própria conta. ' +
     'Os pares de estorno saíram dos dois lados para não inflar entradas nem saídas. Pagamentos ao Mercado Pago e à Portoseg ' +
     'aparecem como pagamento de cartão, e as despesas que os geraram estão nas faturas. Depósito vindo de Isabella Fortunato ' +
     'Traduções é cliente pagando no cartão pelo link do C6, e por isso conta como receita.';
 
-  ponte(); resumoSaidas(); tabelaSaidas(''); tabelaEntradas(''); tabelaPessoal();
+  grafico(); tabelaSaidas(''); tabelaPessoal();
 }
 
-function ponte() {
-  const P = estado.painel, T = P.totais, V = estado.vendas;
-  if (!V) return;
-  const R = n => V.regimes[n] || { valor: 0, qtd: 0 };
-  const parceiro = R('parceiro'), cartao = R('cartao'), faturado = R('faturado'), pix = R('pix');
+function nomeMes(ref) {
+  return ref ? MES_CURTO[ref.mes - 1] + ' de ' + ref.ano : '';
+}
 
-  const passos = [
-    { classe: 'base', texto: 'Vendas fechadas no mês',
-      nota: V.qtd + ' orçamentos: tradução ' + brl(V.traducao) + ', diligência de cartório ' +
-            brl(V.dilCartorio) + ' e diligência de envio ' + brl(V.dilEnvio),
-      valor: V.venda, sinal: '' },
-    { classe: 'menos', texto: 'Parceiro, acerta no mês seguinte',
-      nota: plural(parceiro.qtd, ' orçamento de parceiro', ' orçamentos de parceiros') + ', que entram no caixa do mês que vem',
-      valor: -parceiro.valor, sinal: '− ' },
-    { classe: 'menos', texto: 'Cartão pelo link, cai 14 dias depois',
-      nota: plural(cartao.qtd, ' orçamento no cartão', ' orçamentos no cartão') + ', que chegam pelo C6 duas semanas após a aprovação',
-      valor: -cartao.valor, sinal: '− ' },
-  ];
-  if (faturado.valor > 0) {
-    passos.push({ classe: 'menos', texto: 'Faturado, sem data de recebimento',
-      nota: plural(faturado.qtd, ' orçamento faturado', ' orçamentos faturados'),
-      valor: -faturado.valor, sinal: '− ' });
-  }
-  const proprioMes = V.venda - parceiro.valor - cartao.valor - faturado.valor;
-  passos.push({ classe: '', texto: 'Venda paga no próprio mês',
-    nota: plural(pix.qtd, ' orçamento no pix, pago na aprovação', ' orçamentos no pix, pagos na aprovação'),
-    valor: proprioMes, sinal: '' });
-  passos.push({ classe: 'mais', texto: 'Correio e DHL cobrados do cliente',
-    nota: 'Reembolso do envio, que entra na conta mas não é venda', valor: V.correio, sinal: '+ ' });
-
-  const anterior = T.entradas - proprioMes - V.correio;
-  passos.push({ classe: anterior < 0 ? 'menos' : 'mais', texto: 'Recebido de meses anteriores',
-    nota: 'Parceiros acertando o mês passado e cartão aprovado antes. Do C6 chegaram ' + brl(T.receitaCartao) + ' neste mês',
-    valor: anterior, sinal: anterior < 0 ? '− ' : '+ ' });
-  passos.push({ classe: 'fecho', texto: 'Dinheiro que entrou na conta',
-    nota: T.qtdEntradas + ' recebimentos no extrato do Inter', valor: T.entradas, sinal: '' });
-
-  const cx = el('ponte');
+/* ---------- gráfico de barras horizontal ----------
+   Uma série só, então uma cor só e rótulo direto em cada barra: legenda seria
+   ruído. A categoria pendente sai em outro tom para pular aos olhos. */
+function desenhaGrafico(destino, itens, aoPassar) {
+  const cx = el(destino);
   cx.innerHTML = '';
-  for (const p of passos) {
+  if (!itens.length) return;
+  const maior = Math.max(...itens.map(i => i.valor)) || 1;
+  const total = itens.reduce((a, b) => a + b.valor, 0);
+
+  for (const item of itens) {
     const linha = document.createElement('div');
-    linha.className = 'passo ' + p.classe;
-    const texto = document.createElement('span');
-    texto.className = 'texto';
-    texto.textContent = p.texto;
-    const nota = document.createElement('small');
-    nota.textContent = p.nota;
-    texto.appendChild(nota);
+    linha.className = 'linha-barra' + (item.pendente ? ' pendente' : '');
+
+    const rotulo = document.createElement('span');
+    rotulo.className = 'rotulo-cat';
+    rotulo.textContent = item.nome;
+    if (item.detalhe) {
+      const d = document.createElement('small');
+      d.textContent = item.detalhe;
+      rotulo.appendChild(d);
+    }
+
+    const pista = document.createElement('div');
+    pista.className = 'pista';
+    const marca = document.createElement('div');
+    marca.className = 'marca';
+    marca.style.width = ((item.valor / maior) * 100) + '%';
+    pista.appendChild(marca);
+
     const cifra = document.createElement('span');
-    cifra.className = 'cifra';
-    cifra.textContent = p.sinal + brl(Math.abs(p.valor));
-    linha.append(texto, cifra);
+    cifra.className = 'cifra-cat';
+    cifra.textContent = brl(item.valor);
+
+    linha.append(rotulo, pista, cifra);
+
+    const fatia = total ? (item.valor / total) * 100 : 0;
+    linha.addEventListener('mousemove', e => mostrarDica(e, aoPassar(item, fatia)));
+    linha.addEventListener('mouseleave', esconderDica);
     cx.appendChild(linha);
   }
 }
 
-function barras(destino, itens, corVenda) {
-  const cx = el(destino);
-  cx.innerHTML = '';
-  const maior = itens.length ? Math.max(...itens.map(i => i.valor)) : 1;
-  for (const item of itens) {
-    const d = document.createElement('div');
-    d.className = 'barra';
-    const n = document.createElement('span');
-    n.className = 'nome';
-    n.textContent = item.nome;
-    if (item.detalhe) {
-      const q = document.createElement('span');
-      q.className = 'qtd';
-      q.textContent = item.detalhe;
-      n.appendChild(q);
-    }
-    const v = document.createElement('span');
-    v.className = 'val';
-    v.textContent = brl(item.valor);
-    const t = document.createElement('div');
-    t.className = 'trilho';
-    const p = document.createElement('div');
-    p.className = 'preenche' + (corVenda ? ' venda' : '');
-    p.style.width = Math.max(2, (item.valor / maior) * 100) + '%';
-    t.appendChild(p);
-    d.append(n, v, t);
-    cx.appendChild(d);
-  }
+function mostrarDica(evento, html) {
+  const d = el('dica');
+  d.innerHTML = html;
+  d.hidden = false;
+  const larg = d.offsetWidth, alt = d.offsetHeight;
+  let x = evento.clientX + 14, y = evento.clientY + 14;
+  if (x + larg > window.innerWidth - 8) x = evento.clientX - larg - 14;
+  if (y + alt > window.innerHeight - 8) y = evento.clientY - alt - 14;
+  d.style.left = x + 'px';
+  d.style.top = y + 'px';
 }
+function esconderDica() { el('dica').hidden = true; }
 
-function resumoSaidas() {
+function grafico() {
   const mapa = new Map();
   for (const l of estado.painel.saidas) {
     const a = mapa.get(l.cat) || { soma: 0, qtd: 0 };
@@ -335,8 +328,19 @@ function resumoSaidas() {
     mapa.set(l.cat, a);
   }
   const itens = [...mapa.entries()].sort((a, b) => b[1].soma - a[1].soma)
-    .map(([nome, a]) => ({ nome, valor: arred(a.soma), detalhe: plural(a.qtd, ' lançamento', ' lançamentos') }));
-  barras('barrasSaida', itens, false);
+    .map(([nome, a]) => ({ nome, valor: arred(a.soma),
+      detalhe: plural(a.qtd, ' lançamento', ' lançamentos'),
+      pendente: nome === 'A confirmar' }));
+
+  const total = arred(itens.reduce((a, b) => a + b.valor, 0));
+  const pend = itens.find(i => i.pendente);
+  el('subGrafico').textContent = itens.length + ' categorias somando ' + brl(total) +
+    (pend ? '. Ainda há ' + brl(pend.valor) + ' sem categoria, que é ' +
+      ((pend.valor / total) * 100).toFixed(0) + '% do total.' : '. Tudo categorizado.');
+
+  desenhaGrafico('grafico', itens, (item, fatia) =>
+    '<b>' + item.nome + '</b><br><span class="mono">' + brl(item.valor) + '</span> em ' +
+    item.detalhe.trim() + '<br>' + fatia.toFixed(1).replace('.', ',') + '% das despesas do mês');
 }
 
 function tabelaSaidas(filtro) {
@@ -368,7 +372,7 @@ function tabelaSaidas(filtro) {
       for (const o of estado.painel.saidas) if (o.desc === l.desc) { o.cat = valor; mudadas++; }
       guardar();
       tabelaSaidas(el('buscaSaida').value);
-      resumoSaidas();
+      grafico();
       avisar(mudadas > 1
         ? mudadas + ' lançamentos de ' + l.desc + ' foram categorizados como ' + valor + '.'
         : 'Categoria salva.', 'ok');
@@ -458,7 +462,7 @@ el('arqCategorias').addEventListener('change', evento => {
       const n = aplicarMapa(lido.categorias || lido);
       guardar();
       tabelaSaidas(el('buscaSaida').value);
-      resumoSaidas();
+      grafico();
       avisar(plural(n, ' lançamento recuperado.', ' lançamentos recuperados.'), 'ok');
     } catch (e) {
       avisar('Não consegui ler esse arquivo. Ele precisa ser o JSON que o botão de salvar gera.', 'erro', true);
@@ -507,47 +511,51 @@ el('btnImprimir').addEventListener('click', () => {
 
 /* ================= TELA DE VENDAS ================= */
 
-const MES_CURTO = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
-  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
-
 function desenharVendas() {
+  const P = estado.painel, V = estado.vendas;
   const linhas = estado.planilha;
-  const anual = resumoAnual(linhas);
-  const total = arred(anual.reduce((a, b) => a + b.venda, 0));
-  const qtd = anual.reduce((a, b) => a + b.qtd, 0);
+  const anual = linhas ? resumoAnual(linhas) : [];
 
-  // O mês corrente ainda não fechou, então ele fica fora da média.
-  const hoje = new Date();
-  const atual = hoje.getFullYear() + '-' + String(hoje.getMonth() + 1).padStart(2, '0');
-  const fechados = anual.filter(m => m.chave < atual);
-  const media = fechados.length ? arred(fechados.reduce((a, b) => a + b.venda, 0) / fechados.length) : 0;
+  if (P && V) {
+    const T = P.totais;
+    el('kVenda').textContent = brl(V.venda);
+    el('kVendaNota').textContent = V.qtd + ' orçamentos aprovados em ' + P.mes;
+    el('kEnt').textContent = brl(T.entradas);
+    el('kEntNota').textContent = T.qtdEntradas + ' recebimentos no extrato';
+    const dif = T.entradas - V.venda;
+    const elDif = el('kDif');
+    elDif.textContent = (dif < 0 ? '\u2212 ' : '+ ') + brl(Math.abs(dif));
+    elDif.style.color = dif < 0 ? 'var(--saida)' : 'var(--entrada)';
+    const parc = (V.regimes.parceiro || { valor: 0, qtd: 0 });
+    el('kParceiro').textContent = brl(parc.valor);
+    el('kParceiroNota').textContent = plural(parc.qtd, ' orçamento fechado com parceiro', ' orçamentos fechados com parceiros') +
+      ', para entrar no caixa do mês seguinte';
+    el('kRodape').textContent = 'Conciliação de ' + P.mes +
+      '. Venda é o que foi fechado com o cliente, entrada é o que o banco recebeu, e a diferença tem explicação, não é erro.';
+    el('secaoPonte').classList.remove('escondido');
+    ponte();
+  } else {
+    for (const id of ['kVenda', 'kEnt', 'kDif', 'kParceiro']) el(id).textContent = '\u2014';
+    el('kVendaNota').textContent = P ? 'Carregue a planilha para conciliar' : 'Carregue o extrato e a planilha';
+    el('kEntNota').textContent = el('kParceiroNota').textContent = '';
+    el('kRodape').textContent = linhas
+      ? 'A conciliação precisa do extrato do mês e da planilha ao mesmo tempo. Abaixo, o que dá para ver só com a planilha.'
+      : '';
+    el('secaoPonte').classList.add('escondido');
+  }
 
-  el('vAno').textContent = brl(total);
-  el('vAnoNota').textContent = qtd + ' orçamentos em ' + plural(anual.length, ' mês', ' meses');
-  el('vMedia').textContent = brl(media);
-  el('vMediaNota').textContent = fechados.length
-    ? plural(fechados.length, ' mês já fechado', ' meses já fechados') + ', sem contar o mês em curso'
-    : 'Ainda não há mês fechado';
-  el('vTicket').textContent = brl(qtd ? arred(total / qtd) : 0);
-  el('vTicketNota').textContent = 'Venda média por orçamento aprovado';
+  if (P) { tabelaEntradas(''); el('secEntradas').classList.remove('escondido'); }
+  else el('secEntradas').classList.add('escondido');
 
-  // Parceiros do último mês fechado são o que está entrando agora.
-  const ultimo = fechados.length ? fechados[fechados.length - 1] : anual[anual.length - 1];
-  const aReceber = ultimo ? arred(ultimo.parceiro) : 0;
-  el('vParceiro').textContent = brl(aReceber);
-  el('vParceiroNota').textContent = ultimo
-    ? 'Fechado com parceiros em ' + MES_CURTO[ultimo.mes - 1] + ', para receber no mês seguinte' : '';
+  if (!linhas) return;
 
-  const cartorio = arred(anual.reduce((a, b) => a + b.cartorio, 0));
-  el('vRodape').textContent = 'Além da venda, passaram ' + brl(cartorio) +
-    ' de taxa de cartório, que é repasse ao notário e não entra como receita, e ' +
-    brl(arred(anual.reduce((a, b) => a + b.correio, 0))) + ' de Correio e DHL cobrados dos clientes.';
-
-  barras('barrasVendas', anual.map(m => ({
+  desenhaGrafico('graficoVendas', anual.map(m => ({
     nome: MES_CURTO[m.mes - 1] + ' de ' + m.ano,
     valor: m.venda,
-    detalhe: m.qtd + ' orçamentos, ' + brl(m.parceiro) + ' de parceiros',
-  })), true);
+    detalhe: m.qtd + ' orçamentos',
+    pendente: P && m.ano === P.ano && m.mes === P.mesNum ? false : false,
+  })), (item, fatia) => '<b>' + item.nome + '</b><br><span class="mono">' + brl(item.valor) +
+    '</span> em ' + item.detalhe + '<br>' + fatia.toFixed(1).replace('.', ',') + '% do ano');
 
   const seletor = el('mesParceiro');
   const escolhido = seletor.value;
@@ -558,10 +566,68 @@ function desenharVendas() {
     o.textContent = MES_CURTO[m.mes - 1] + ' de ' + m.ano;
     seletor.appendChild(o);
   }
+  // O padrão é o mês do extrato; sem extrato, o último mês da planilha.
+  const alvo = P ? P.ano + '-' + String(P.mesNum).padStart(2, '0') : null;
   if (escolhido && anual.some(m => m.chave === escolhido)) seletor.value = escolhido;
-  else if (ultimo) seletor.value = ultimo.chave;
+  else if (alvo && anual.some(m => m.chave === alvo)) seletor.value = alvo;
   tabelaParceiros();
-  barrasRegime();
+}
+
+/* A ponte desce da venda do mês até o dinheiro que entrou, passo a passo. */
+function ponte() {
+  const P = estado.painel, T = P.totais, V = estado.vendas;
+  if (!V) return;
+  const R = n => V.regimes[n] || { valor: 0, qtd: 0 };
+  const parceiro = R('parceiro'), cartao = R('cartao'), faturado = R('faturado'), pix = R('pix');
+
+  const passos = [
+    { classe: 'base', texto: 'Vendido no mês',
+      nota: V.qtd + ' orçamentos: tradução ' + brl(V.traducao) + ', diligência de cartório ' +
+            brl(V.dilCartorio) + ' e diligência de envio ' + brl(V.dilEnvio),
+      valor: V.venda, sinal: '' },
+    { classe: 'menos', texto: 'Parceiro, acerta no mês seguinte',
+      nota: plural(parceiro.qtd, ' orçamento de parceiro', ' orçamentos de parceiros') + ', que entram no caixa do mês que vem',
+      valor: -parceiro.valor, sinal: '\u2212 ' },
+    { classe: 'menos', texto: 'Cartão pelo link, cai 14 dias depois',
+      nota: plural(cartao.qtd, ' orçamento no cartão', ' orçamentos no cartão') + ', que chegam pelo C6 duas semanas após a aprovação',
+      valor: -cartao.valor, sinal: '\u2212 ' },
+  ];
+  if (faturado.valor > 0) {
+    passos.push({ classe: 'menos', texto: 'Faturado, sem data de recebimento',
+      nota: plural(faturado.qtd, ' orçamento faturado', ' orçamentos faturados'),
+      valor: -faturado.valor, sinal: '\u2212 ' });
+  }
+  const proprioMes = V.venda - parceiro.valor - cartao.valor - faturado.valor;
+  passos.push({ classe: '', texto: 'Venda paga no próprio mês',
+    nota: plural(pix.qtd, ' orçamento no pix, pago na aprovação', ' orçamentos no pix, pagos na aprovação'),
+    valor: proprioMes, sinal: '' });
+  passos.push({ classe: 'mais', texto: 'Correio e DHL cobrados do cliente',
+    nota: 'Reembolso do envio, que entra na conta mas não é venda', valor: V.correio, sinal: '+ ' });
+
+  const anterior = T.entradas - proprioMes - V.correio;
+  passos.push({ classe: anterior < 0 ? 'menos' : 'mais', texto: 'Recebido de meses anteriores',
+    nota: 'Parceiros acertando o mês passado e cartão aprovado antes. Do C6 chegaram ' + brl(T.receitaCartao) + ' neste mês',
+    valor: anterior, sinal: anterior < 0 ? '\u2212 ' : '+ ' });
+  passos.push({ classe: 'fecho', texto: 'Dinheiro que entrou na conta',
+    nota: T.qtdEntradas + ' recebimentos no extrato do Inter', valor: T.entradas, sinal: '' });
+
+  const cx = el('ponte');
+  cx.innerHTML = '';
+  for (const p of passos) {
+    const linha = document.createElement('div');
+    linha.className = 'passo ' + p.classe;
+    const texto = document.createElement('span');
+    texto.className = 'texto';
+    texto.textContent = p.texto;
+    const nota = document.createElement('small');
+    nota.textContent = p.nota;
+    texto.appendChild(nota);
+    const cifra = document.createElement('span');
+    cifra.className = 'cifra';
+    cifra.textContent = p.sinal + brl(Math.abs(p.valor));
+    linha.append(texto, cifra);
+    cx.appendChild(linha);
+  }
 }
 
 function tabelaParceiros() {
@@ -600,23 +666,5 @@ function tabelaParceiros() {
 }
 el('mesParceiro').addEventListener('change', tabelaParceiros);
 
-function barrasRegime() {
-  const chave = el('mesParceiro').value;
-  if (!chave) return;
-  const [ano, mes] = chave.split('-').map(Number);
-  const v = vendasDoMes(estado.planilha, ano, mes);
-  if (!v) { barras('barrasRegime', [], true); return; }
-  const nomes = {
-    pix: 'Pix, cai na própria aprovação',
-    parceiro: 'Parceiro, cai no mês seguinte',
-    cartao: 'Cartão pelo link, cai 14 dias depois',
-    faturado: 'Faturado, sem data definida',
-  };
-  const itens = Object.keys(v.regimes)
-    .map(k => ({ nome: nomes[k] || k, valor: v.regimes[k].valor, detalhe: plural(v.regimes[k].qtd, ' orçamento', ' orçamentos') }))
-    .sort((a, b) => b.valor - a.valor);
-  barras('barrasRegime', itens, true);
-}
 
-/* Ao abrir, a página volta ao estado do último uso nesta máquina. */
 recuperarDados();

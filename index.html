@@ -103,6 +103,26 @@ section{margin-bottom:46px}
 .ponte .passo.fecho{border-bottom:none;border-top:1.5px solid var(--tinta);margin-top:4px;padding-top:11px}
 .ponte .passo.fecho .texto,.ponte .passo.fecho .cifra{font-weight:600}
 
+/* gráfico de barras horizontal */
+.grafico{display:flex;flex-direction:column;gap:2px;margin-top:4px}
+.linha-barra{display:grid;grid-template-columns:minmax(120px,210px) 1fr minmax(96px,auto);
+  align-items:center;gap:14px;padding:5px 0;border-radius:3px;cursor:default}
+.linha-barra:hover{background:var(--papel-alto)}
+.linha-barra .rotulo-cat{font-size:13.5px;line-height:1.3}
+.linha-barra .rotulo-cat small{display:block;font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:10.5px;color:var(--tinta-fraca);margin-top:1px}
+.linha-barra .pista{height:19px;background:transparent;position:relative}
+.linha-barra .marca{height:100%;background:var(--carimbo);border-radius:0 4px 4px 0;
+  transition:width .3s ease;min-width:3px}
+.linha-barra.pendente .marca{background:var(--neutro)}
+.linha-barra .cifra-cat{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:13.5px;
+  font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.dica{position:fixed;z-index:20;background:var(--tinta);color:var(--papel);
+  font-size:12.5px;line-height:1.45;padding:8px 11px;border-radius:4px;max-width:280px;
+  pointer-events:none;box-shadow:0 4px 14px rgba(26,29,38,.22)}
+.dica b{font-weight:600}
+.dica .mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+
 /* barras */
 .barras{display:flex;flex-direction:column;gap:9px}
 .barra{display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:14px;
@@ -181,7 +201,9 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
   #telaMes,#telaVendas{display:block!important}
   #telaVendas{break-before:page}
 
-  section{margin-bottom:20px;break-inside:avoid}
+  section{margin-bottom:18px;break-inside:auto}
+  h2{break-after:avoid}
+  .linha-barra,.passo{break-inside:avoid}
   h2{font-size:13pt;margin-bottom:3px}
   .subtitulo{font-size:9pt;margin-bottom:10px;max-width:none}
   .carimbos{grid-template-columns:repeat(5,1fr);gap:7px;break-inside:avoid}
@@ -199,6 +221,13 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
   .barra{padding-bottom:4px}
   .barra .nome,.barra .val{font-size:9.5pt}
   .barra .qtd{font-size:8pt}
+  .dica{display:none!important}
+  .linha-barra{padding:3px 0;grid-template-columns:minmax(110px,180px) 1fr minmax(86px,auto)}
+  .linha-barra:hover{background:none}
+  .linha-barra .rotulo-cat{font-size:9pt}
+  .linha-barra .rotulo-cat small{font-size:7.5pt}
+  .linha-barra .pista{height:13px}
+  .linha-barra .cifra-cat{font-size:9pt}
 
   table{font-size:9pt;break-inside:auto}
   thead{display:table-header-group}
@@ -254,8 +283,8 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
 
   <div class="barra-abas">
     <div class="abas" role="tablist">
-      <button type="button" id="abaMes" role="tab" aria-selected="true" disabled>Mês</button>
-      <button type="button" id="abaVendas" role="tab" aria-selected="false" disabled>Vendas</button>
+      <button type="button" id="abaMes" role="tab" aria-selected="true" disabled>Despesas</button>
+      <button type="button" id="abaVendas" role="tab" aria-selected="false" disabled>Conciliação</button>
     </div>
     <div class="acoes-impressao">
       <label class="caixinha"><input type="checkbox" id="optTabelas"> incluir as tabelas completas</label>
@@ -270,21 +299,26 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
     <p class="periodo" id="capaNota"></p>
   </div>
 
-  <!-- ================= TELA DO MÊS ================= -->
+  <!-- ================= ABA DESPESAS ================= -->
   <div id="telaMes" class="escondido">
-    <section class="carimbos" aria-label="Totais do mês">
-      <div class="carimbo azul">
-        <span class="rotulo">Vendas fechadas no mês</span>
-        <span class="cifra" id="cVenda">&mdash;</span>
-        <span class="nota" id="nVenda"></span>
-      </div>
+    <section class="carimbos" aria-label="Números do mês">
       <div class="carimbo verde">
-        <span class="rotulo">Dinheiro que entrou na conta</span>
+        <span class="rotulo">Dinheiro que entrou</span>
         <span class="cifra" id="cEnt">&mdash;</span>
         <span class="nota" id="nEnt"></span>
       </div>
+      <div class="carimbo azul">
+        <span class="rotulo">Vendido no mês</span>
+        <span class="cifra" id="cVenda">&mdash;</span>
+        <span class="nota" id="nVenda"></span>
+      </div>
+      <div class="carimbo azul">
+        <span class="rotulo">Vendido no mês anterior</span>
+        <span class="cifra" id="cVendaAnt">&mdash;</span>
+        <span class="nota" id="nVendaAnt"></span>
+      </div>
       <div class="carimbo vermelho">
-        <span class="rotulo">Saídas para terceiros</span>
+        <span class="rotulo">Saiu em despesas</span>
         <span class="cifra" id="cSai">&mdash;</span>
         <span class="nota" id="nSai"></span>
       </div>
@@ -293,31 +327,21 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
         <span class="cifra" id="cPes">&mdash;</span>
         <span class="nota" id="nPes"></span>
       </div>
-      <div class="carimbo">
-        <span class="rotulo">Resultado do mês</span>
-        <span class="cifra" id="cSaldo">&mdash;</span>
-        <span class="nota">Entradas menos todas as saídas</span>
-      </div>
     </section>
     <p class="rodape-carimbos" id="rodape"></p>
 
-    <section id="secaoPonte">
-      <h2>Por que a venda e a entrada não são o mesmo número</h2>
-      <p class="subtitulo">Como o pagamento acontece na aprovação, os dois números só se separam por três motivos: o parceiro acerta no mês seguinte, o cartão pelo link cai 14 dias depois e o Correio entra na conta sem ser venda.</p>
-      <div class="ponte" id="ponte"></div>
-    </section>
-
     <section>
-      <h2>Saídas por categoria</h2>
-      <p class="subtitulo so-tela">Os valores se refazem sozinhos quando você troca a categoria de uma linha na tabela de saídas.</p>
-      <div class="barras" id="barrasSaida"></div>
+      <h2>Despesas por categoria</h2>
+      <p class="subtitulo" id="subGrafico"></p>
+      <div class="grafico" id="grafico" role="img" aria-label="Despesas do mês por categoria"></div>
+      <div class="dica" id="dica" hidden aria-hidden="true"></div>
     </section>
 
     <section id="secSaidas">
-      <h2>Saídas, linha a linha</h2>
-      <p class="subtitulo so-tela">Trocar a categoria de um favorecido muda todos os lançamentos dele de uma vez. O trabalho fica guardado neste navegador, e o botão de salvar baixa um arquivo que você pode carregar de volta depois.</p>
+      <h2>Lista de despesas</h2>
+      <p class="subtitulo so-tela">Trocar a categoria de um favorecido muda todos os lançamentos dele de uma vez, e o gráfico acima se refaz na hora. O trabalho fica guardado neste navegador.</p>
       <div class="ferramentas">
-        <input type="search" id="buscaSaida" placeholder="Buscar por favorecido ou categoria" aria-label="Buscar saída">
+        <input type="search" id="buscaSaida" placeholder="Buscar por favorecido ou categoria" aria-label="Buscar despesa">
         <button type="button" class="botao" id="btnSalvar">Salvar categorias</button>
         <button type="button" class="botao" id="btnCarregar">Carregar categorias</button>
         <input type="file" id="arqCategorias" accept="application/json,.json" hidden>
@@ -332,9 +356,56 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
       <p class="vazio escondido" id="vazioSaida">Nenhuma linha corresponde à busca.</p>
     </section>
 
+    <section id="secPessoal">
+      <h2>Pix entre a conta da empresa e a sua conta pessoal</h2>
+      <p class="subtitulo">Fica fora das despesas da empresa, porque não é custo do negócio. Aparece aqui só para a conta do mês fechar.</p>
+      <div class="tabela-rolagem">
+        <table>
+          <thead><tr><th>Data</th><th>Sentido</th><th class="num">Valor</th></tr></thead>
+          <tbody id="corpoPes"></tbody>
+        </table>
+      </div>
+      <p class="vazio escondido" id="vazioPes">Nenhum pix para a conta pessoal neste mês.</p>
+    </section>
+
+    <p class="nota-fim" id="notaFim"></p>
+  </div>
+
+  <!-- ================= ABA CONCILIAÇÃO ================= -->
+  <div id="telaVendas" class="escondido">
+    <section class="carimbos" aria-label="Conciliação do mês">
+      <div class="carimbo azul">
+        <span class="rotulo">Vendido no mês</span>
+        <span class="cifra" id="kVenda">&mdash;</span>
+        <span class="nota" id="kVendaNota"></span>
+      </div>
+      <div class="carimbo verde">
+        <span class="rotulo">Entrou na conta</span>
+        <span class="cifra" id="kEnt">&mdash;</span>
+        <span class="nota" id="kEntNota"></span>
+      </div>
+      <div class="carimbo">
+        <span class="rotulo">Diferença entre os dois</span>
+        <span class="cifra" id="kDif">&mdash;</span>
+        <span class="nota">Explicada passo a passo logo abaixo</span>
+      </div>
+      <div class="carimbo vermelho">
+        <span class="rotulo">A receber de parceiros</span>
+        <span class="cifra" id="kParceiro">&mdash;</span>
+        <span class="nota" id="kParceiroNota"></span>
+      </div>
+    </section>
+    <p class="rodape-carimbos" id="kRodape"></p>
+
+    <section id="secaoPonte">
+      <h2>Conciliação entre o que foi vendido e o que entrou</h2>
+      <p class="subtitulo">Como o pagamento acontece na aprovação, os dois números só se separam por três motivos: o parceiro acerta no mês seguinte, o cartão pelo link cai 14 dias depois e o Correio entra na conta sem ser venda.</p>
+      <div class="ponte" id="ponte"></div>
+    </section>
+
     <section id="secEntradas">
       <h2>Entradas, linha a linha</h2>
-      <p class="subtitulo so-tela">Quase toda entrada é pagamento de cliente, então aqui não há campo de categoria. A observação só aparece quando o dinheiro comprovadamente não é receita.</p>
+      <p class="subtitulo so-tela">Quase toda entrada é pagamento de cliente. A observação só aparece quando o dinheiro comprovadamente não é receita, como repasse para o Cora ou devolução.</p>
       <div class="ferramentas">
         <input type="search" id="buscaEnt" placeholder="Buscar por pagador" aria-label="Buscar entrada">
         <span class="legenda" id="contaEnt"></span>
@@ -348,56 +419,9 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
       <p class="vazio escondido" id="vazioEnt">Nenhuma linha corresponde à busca.</p>
     </section>
 
-    <section id="secPessoal">
-      <h2>Pix entre a conta da empresa e a sua conta pessoal</h2>
-      <p class="subtitulo">Movimentação separada do resto, para não se misturar com despesa da empresa nem com receita.</p>
-      <div class="tabela-rolagem">
-        <table>
-          <thead><tr><th>Data</th><th>Sentido</th><th class="num">Valor</th></tr></thead>
-          <tbody id="corpoPes"></tbody>
-        </table>
-      </div>
-      <p class="vazio escondido" id="vazioPes">Nenhum pix para a conta pessoal neste mês.</p>
-    </section>
-
-    <p class="nota-fim" id="notaFim"></p>
-  </div>
-
-  <!-- ================= TELA DE VENDAS ================= -->
-  <div id="telaVendas" class="escondido">
-    <section class="carimbos" aria-label="Totais de vendas">
-      <div class="carimbo azul">
-        <span class="rotulo">Vendas no ano</span>
-        <span class="cifra" id="vAno">&mdash;</span>
-        <span class="nota" id="vAnoNota"></span>
-      </div>
-      <div class="carimbo">
-        <span class="rotulo">Média por mês fechado</span>
-        <span class="cifra" id="vMedia">&mdash;</span>
-        <span class="nota" id="vMediaNota"></span>
-      </div>
-      <div class="carimbo">
-        <span class="rotulo">Ticket médio</span>
-        <span class="cifra" id="vTicket">&mdash;</span>
-        <span class="nota" id="vTicketNota"></span>
-      </div>
-      <div class="carimbo vermelho">
-        <span class="rotulo">A receber de parceiros</span>
-        <span class="cifra" id="vParceiro">&mdash;</span>
-        <span class="nota" id="vParceiroNota"></span>
-      </div>
-    </section>
-    <p class="rodape-carimbos" id="vRodape"></p>
-
-    <section>
-      <h2>Vendas mês a mês</h2>
-      <p class="subtitulo">Tradução mais diligência de cartório e de envio, pela data de aprovação, que é a data em que o cliente paga. A taxa de cartório fica fora, porque é repasse ao notário.</p>
-      <div class="barras" id="barrasVendas"></div>
-    </section>
-
     <section>
       <h2>Parceiros a receber</h2>
-      <p class="subtitulo">O que cada parceiro fechou no mês escolhido, que entra no caixa no mês seguinte. A coluna de recebido procura o nome do parceiro nas entradas do extrato carregado, então serve para orientar a cobrança e não para dar baixa.</p>
+      <p class="subtitulo">O que cada parceiro fechou no mês escolhido, que entra no caixa no mês seguinte. A coluna de encontrado procura o nome do parceiro nas entradas do extrato carregado, então serve para orientar a cobrança e não para dar baixa.</p>
       <div class="ferramentas">
         <label class="legenda" for="mesParceiro">Trabalho fechado em</label>
         <select id="mesParceiro" class="seletor-mes" aria-label="Mês dos parceiros"></select>
@@ -413,14 +437,13 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
     </section>
 
     <section>
-      <h2>Como cada venda do mês vira dinheiro</h2>
-      <p class="subtitulo">A mesma venda demora tempos diferentes para cair na conta conforme quem paga e como paga.</p>
-      <div class="barras" id="barrasRegime"></div>
+      <h2>Vendas mês a mês</h2>
+      <p class="subtitulo">Tradução mais diligência de cartório e de envio, pela data de aprovação, que é a data em que o cliente paga. A taxa de cartório fica fora, porque é repasse ao notário.</p>
+      <div class="grafico" id="graficoVendas" role="img" aria-label="Vendas por mês"></div>
     </section>
 
     <p class="nota-fim">Vendas contadas pela data de aprovação em todas as abas da planilha, inclusive quando o orçamento foi aprovado em um mês e registrado na aba de outro. Orçamentos cancelados ficam fora, e o mesmo orçamento repetido em duas abas é contado uma vez só.</p>
   </div>
-</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="nucleo.js"></script>

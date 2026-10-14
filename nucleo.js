@@ -280,6 +280,11 @@ function vendasDoMes(linhas, ano, mes) {
   };
 }
 
+/* O mês anterior ao de referência, para a comparação no card. */
+function mesAnterior(ano, mes) {
+  return mes === 1 ? { ano: ano - 1, mes: 12 } : { ano, mes: mes - 1 };
+}
+
 function resumoAnual(linhas) {
   const porMes = {};
   for (const l of linhas) {
@@ -320,5 +325,5 @@ function recebidoDe(nome, entradas) {
 
 if (typeof module !== 'undefined') {
   module.exports = { processarExtrato, lerPlanilha, vendasDoMes, resumoAnual,
-    parceirosPorMes, recebidoDe, CATEGORIAS, MESES, arred, semAcento };
+    parceirosPorMes, recebidoDe, mesAnterior, CATEGORIAS, MESES, arred, semAcento };
 }
