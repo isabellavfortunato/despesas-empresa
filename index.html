@@ -73,6 +73,19 @@ h1{font-family:"Fraunces",Georgia,serif;font-weight:600;font-size:clamp(28px,5vw
 .abas button[aria-selected=true]{color:var(--tinta);border-bottom-color:var(--carimbo)}
 .abas button:disabled{opacity:.35;cursor:not-allowed}
 
+/* abas dos meses */
+.abas-meses{display:flex;gap:4px;overflow-x:auto;margin:0 0 18px;padding-bottom:2px;
+  scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+.abas-meses button{flex:0 0 auto;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;
+  letter-spacing:.12em;padding:9px 13px 8px;border:1.5px solid var(--hairline);border-radius:3px;
+  background:var(--papel-alto);color:var(--tinta-fraca);cursor:pointer;transition:.18s;line-height:1.2;
+  display:flex;flex-direction:column;align-items:center;min-width:64px}
+.abas-meses button small{font-size:9.5px;letter-spacing:.04em;text-transform:none;margin-top:3px;color:var(--neutro)}
+.abas-meses button:hover{border-color:var(--carimbo);color:var(--tinta)}
+.abas-meses button[aria-selected=true]{background:var(--carimbo);border-color:var(--carimbo);color:var(--papel)}
+.abas-meses button[aria-selected=true] small{color:var(--papel)}
+.abas-meses button.sem-extrato{border-style:dashed}
+
 /* cards */
 .carimbos{display:grid;grid-template-columns:repeat(auto-fit,minmax(194px,1fr));gap:14px;margin-bottom:14px}
 .carimbo{background:var(--papel-alto);border:1.5px solid var(--carimbo);border-radius:3px;padding:17px;
@@ -121,6 +134,9 @@ section{margin-bottom:46px}
 .linha-barra .marca{height:100%;background:var(--carimbo);border-radius:0 4px 4px 0;
   transition:width .3s ease;min-width:3px}
 .linha-barra.pendente .marca{background:var(--neutro)}
+.linha-barra.atual .marca{background:var(--venda)}
+.linha-barra.atual .rotulo-cat{font-weight:600}
+.linha-barra.clicavel{cursor:pointer}
 .linha-barra .cifra-cat{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:13.5px;
   font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
 .dica{position:fixed;z-index:20;background:var(--tinta);color:var(--papel);
@@ -196,7 +212,8 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
   .folha{max-width:none;padding:0}
 
   /* fora do papel: tudo que só serve para operar a página */
-  .cabecalho,.entrada-arquivos,.aviso,.memoria,.barra-abas,.ferramentas,.escondido{display:none!important}
+  .cabecalho,.entrada-arquivos,#aviso,.memoria,.barra-abas,.abas-meses,.ferramentas,.escondido{display:none!important}
+  .aviso{font-size:8.5pt;padding:6px 9px}
   select{display:none!important}
 
   .so-papel{display:block;border-bottom:2px solid var(--tinta);padding-bottom:12px;margin-bottom:18px}
@@ -262,7 +279,7 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
   <header class="cabecalho">
     <span class="sobrenome">Banco Inter &middot; Isabella Fortunato Traduções</span>
     <h1>Financeiro IFT</h1>
-    <p class="periodo">Solte o extrato do Inter e a planilha de status de clientes. A conta inteira roda aqui no seu navegador e nenhum arquivo sai do seu computador.</p>
+    <p class="periodo">Solte o extrato do Inter, de um mês ou do ano inteiro, e a planilha de status de clientes. Cada mês ganha uma aba própria. A conta inteira roda aqui no seu navegador e nenhum arquivo sai do seu computador.</p>
   </header>
 
   <div class="entrada-arquivos">
@@ -287,6 +304,8 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
 
   <p class="aviso escondido" id="aviso"></p>
 
+  <nav class="abas-meses" id="abasMeses" role="tablist" aria-label="Mês"></nav>
+
   <div class="barra-abas">
     <div class="abas" role="tablist">
       <button type="button" id="abaMes" role="tab" aria-selected="true" disabled>Despesas</button>
@@ -304,6 +323,8 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
     <h1 id="capaTitulo">Relatório mensal</h1>
     <p class="periodo" id="capaNota"></p>
   </div>
+
+  <p class="aviso atencao escondido" id="semExtrato"></p>
 
   <!-- ================= ABA DESPESAS ================= -->
   <div id="telaMes" class="escondido">
@@ -335,6 +356,7 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
       </div>
     </section>
     <p class="rodape-carimbos" id="rodape"></p>
+    <p class="aviso atencao escondido" id="avisoMes"></p>
 
     <section>
       <h2>Despesas por categoria</h2>
@@ -402,6 +424,7 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
       </div>
     </section>
     <p class="rodape-carimbos" id="kRodape"></p>
+    <p class="aviso atencao escondido" id="avisoPlanilha"></p>
 
     <section id="secaoPonte">
       <h2>Conciliação entre o que foi vendido e o que entrou</h2>
@@ -425,26 +448,22 @@ select.seletor-mes{border:1.5px solid var(--hairline);border-radius:3px;padding:
       <p class="vazio escondido" id="vazioEnt">Nenhuma linha corresponde à busca.</p>
     </section>
 
-    <section>
+    <section id="secParceiros">
       <h2>Parceiros a receber</h2>
-      <p class="subtitulo">O que cada parceiro fechou no mês escolhido, que entra no caixa no mês seguinte. A coluna de encontrado procura o nome do parceiro nas entradas do extrato carregado, então serve para orientar a cobrança e não para dar baixa.</p>
-      <div class="ferramentas">
-        <label class="legenda" for="mesParceiro">Trabalho fechado em</label>
-        <select id="mesParceiro" class="seletor-mes" aria-label="Mês dos parceiros"></select>
-        <span class="legenda" id="contaParceiro"></span>
-      </div>
+      <p class="subtitulo">O que cada parceiro fechou no mês escolhido, que entra no caixa no mês seguinte. A última coluna procura o primeiro nome do parceiro nas entradas do mês seguinte, então serve para orientar a cobrança e não para dar baixa.</p>
+      <p class="legenda" id="contaParceiro"></p>
       <div class="tabela-rolagem">
         <table>
-          <thead><tr><th>Parceiro</th><th class="num">Orçamentos</th><th class="num">Fechado</th><th class="num">Envios</th><th class="num">Encontrado no extrato</th></tr></thead>
+          <thead><tr><th>Parceiro</th><th class="num">Orçamentos</th><th class="num">Fechado</th><th class="num">Envios</th><th class="num" id="thEncontrado">Encontrado no mês seguinte</th></tr></thead>
           <tbody id="corpoParceiro"></tbody>
         </table>
       </div>
       <p class="vazio escondido" id="vazioParceiro">Nenhum parceiro com trabalho fechado nesse mês.</p>
     </section>
 
-    <section>
+    <section id="secVendasAno">
       <h2>Vendas mês a mês</h2>
-      <p class="subtitulo">Tradução mais diligência de cartório e de envio, pela data de aprovação, que é a data em que o cliente paga. A taxa de cartório fica fora, porque é repasse ao notário.</p>
+      <p class="subtitulo">Tradução mais diligência de cartório e de envio, pela data de aprovação, que é a data em que o cliente paga. A taxa de cartório fica fora, porque é repasse ao notário. O mês escolhido aparece destacado, e clicar em uma barra abre aquele mês.</p>
       <div class="grafico" id="graficoVendas" role="img" aria-label="Vendas por mês"></div>
     </section>
 

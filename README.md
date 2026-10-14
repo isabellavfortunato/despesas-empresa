@@ -9,12 +9,15 @@ O que foi carregado fica guardado no próprio navegador, então ao reabrir a pá
 ## Como usar
 
 1. Abrir a página.
-2. Soltar o extrato do Banco Inter na primeira caixa. Aceita **.csv** e **.ofx**.
+2. Soltar o extrato do Banco Inter na primeira caixa. Aceita **.csv** e **.ofx**, de um mês só ou de vários meses, como o ano inteiro.
 3. Soltar a planilha Status clientes na segunda caixa. É o arquivo .xlsx com as abas dos meses.
+4. Escolher o mês na fileira de abas do alto.
+
+Cada mês que aparece no extrato ou na planilha ganha uma aba própria, e tudo na página segue o mês escolhido: os números, as despesas, a conciliação, os parceiros e o relatório impresso. O mês em que o extrato termina antes do último dia aparece marcado com a data final, como "até 13/10". O mês que só existe na planilha aparece com a borda tracejada e a marca "só planilha", e nele a aba Despesas fica fechada.
 
 A aba **Despesas** mostra os números do mês e para onde o dinheiro foi. A aba **Conciliação** compara o que foi vendido com o que entrou na conta.
 
-Da segunda vez em diante só é preciso soltar os arquivos quando houver mês novo. Carregar um arquivo substitui o anterior.
+Da segunda vez em diante só é preciso soltar os arquivos quando houver mês novo. Carregar um arquivo substitui o anterior, então o mais prático é baixar sempre o extrato do ano até a data de hoje.
 
 ## O que a página calcula
 
@@ -34,11 +37,15 @@ Também fica de fora a fatura do cartão, que tem outro formato. Esta página l�
 
 ## As regras embutidas
 
-Movimentação de CDB, cofrinho, aplicação e resgate fica fora de todos os totais, por ser dinheiro andando dentro da própria conta. Estornos saem em pares, dos dois lados, e quando a devolução não encontra par de mesmo valor a página avisa em vez de abater sozinha.
+Movimentação de CDB, cofrinho, aplicação e resgate fica fora de todos os totais, por ser dinheiro andando dentro da própria conta. Estornos saem em pares, dos dois lados, mesmo quando a devolução cai num mês e o pagamento original no anterior. Quando a devolução não encontra par de mesmo valor, a página avisa dentro do mês em vez de abater sozinha.
 
 Pix para Isabella Venceslau Fortunato e Jalma Maria de Souza Barros vai para uma tabela própria, por ser conta pessoal. Pagamentos ao Mercado Pago e à Portoseg entram como pagamento de cartão, e não como despesa nova, porque os gastos que os geraram estão nas faturas.
 
-Depósito vindo de Isabella Fortunato Traduções é a conta do C6, onde caem os pagamentos feitos pelo link, e por isso conta como receita de cliente. Saindo, o mesmo nome significa repasse para o Cora, que cobre os envios.
+Depósito vindo de Isabella Fortunato Traduções pela conta do C6 é onde caem os pagamentos feitos no cartão pelo link, e por isso conta como entrada e como receita de cliente. A página reconhece o C6 pelo código do banco que vem no próprio pix (31872495). Vindo do Cora (código 37880206), o mesmo nome é dinheiro da própria empresa voltando e fica marcado como entrada que não é venda. Vindo de qualquer outro banco, entra como receita com a observação "a confirmar". Saindo, o mesmo nome significa repasse para o Cora, que cobre os envios, ou transferência para o C6 quando o destino é o C6.
+
+Na conciliação, as entradas que não são venda (retorno do Cora, devolução, estorno de cartão) aparecem num passo próprio, para não se misturarem com o que foi recebido de meses anteriores. A coluna de parceiros procura o pagamento nas entradas do mês seguinte, que é quando o parceiro acerta.
+
+Na planilha, a linha com data de aprovação preenchida mas ilegível, como "05/05/" sem o ano, fica fora de todos os meses, e a página lista essas linhas na aba Conciliação para serem corrigidas.
 
 O pagamento acontece na aprovação, então a data da coluna Aprovado é a data em que o dinheiro entra. Há duas exceções: quem tem Parceiro na coluna Origem acerta no mês seguinte, e quem paga no cartão entra pelo C6 catorze dias depois.
 
@@ -48,17 +55,17 @@ A taxa de cartório fica fora da venda, por ser repasse ao notário, e o Correio
 
 O botão **Imprimir relatório**, ao lado das abas, monta a versão de papel com as duas telas juntas, independentemente de qual estiver aberta. Na janela de impressão do navegador, escolha **Salvar como PDF** no lugar da impressora.
 
-Por padrão o relatório sai resumido, em quatro páginas: capa com o mês, os cinco números, o gráfico de despesas por categoria, a conciliação passo a passo, os parceiros a receber e as vendas mês a mês. Marcando **incluir as tabelas completas** antes de imprimir, entram também as três tabelas de lançamentos, linha a linha, o que leva o documento a cerca de catorze páginas.
+O relatório é sempre do mês escolhido nas abas. Por padrão ele sai resumido, em três ou quatro páginas: capa com o mês, os cinco números, o gráfico de despesas por categoria, a conciliação passo a passo, os parceiros a receber e as vendas mês a mês. Marcando **incluir as tabelas completas** antes de imprimir, entram também as três tabelas de lançamentos, linha a linha, o que leva o documento a cerca de catorze páginas.
 
 As caixas de carregar arquivo, as abas, os campos de busca e os seletores de categoria não vão para o papel. A categoria de cada saída aparece como texto no lugar do seletor.
 
 ## Categorias
 
-Só as despesas têm campo de categoria. Trocar a categoria de um favorecido muda todos os lançamentos dele de uma vez, e o trabalho fica guardado no navegador. O botão de salvar baixa um arquivo com as categorias definidas, e o de carregar devolve esse arquivo para dentro da página, o que serve para levar o trabalho de um computador para outro.
+Só as despesas têm campo de categoria. Trocar a categoria de um favorecido muda todos os lançamentos dele de uma vez, em todos os meses, e o trabalho fica guardado no navegador. Só fica guardado o que foi escolhido à mão; o que a regra já acerta sozinha continua vindo da regra. O botão de salvar baixa um arquivo com as categorias escolhidas, e o de carregar devolve esse arquivo para dentro da página, o que serve para levar o trabalho de um computador para outro. Arquivos de categorias salvos pela versão anterior continuam servindo.
 
 ## Ícone e tela inicial
 
-O ícone é três barras horizontais de tamanhos diferentes, o mesmo gesto do gráfico de despesas, em branco sobre roxo. Ele foi desenhado grosso de propósito para continuar legível a 16 pixels, que é o tamanho na aba do navegador.
+O ícone é o símbolo R$ em branco, com serifa e negrito, dentro de um anel claro sobre fundo cor telha (degradê de #C2603A para #A2482A). As letras estão desenhadas como contorno no próprio arquivo, então não dependem de fonte instalada.
 
 Com o manifesto, dá para salvar a página na tela inicial do celular e ela abre em tela cheia, sem a barra do navegador, com o nome Financeiro. No iPhone é pelo botão de compartilhar e depois Adicionar à Tela de Início; no Android, pelo menu do Chrome e depois Adicionar à tela inicial.
 

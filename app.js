@@ -1,4 +1,8 @@
-/* Interface do Financeiro IFT. A conta mora em nucleo.js; aqui só desenhamos. */
+/* Interface do Financeiro IFT. A conta mora em nucleo.js; aqui só desenhamos.
+
+   O extrato é guardado inteiro e cada mês é montado na hora em que a aba dele é
+   aberta. Por isso tudo na página, das despesas aos parceiros e ao relatório
+   impresso, segue o mês escolhido na fileira de abas do alto. */
 
 const brl = v => (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const el = id => document.getElementById(id);
@@ -6,9 +10,18 @@ const plural = (q, um, muitos) => q + (q === 1 ? um : muitos);
 
 const MES_CURTO = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
   'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const SIGLA = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 
-const estado = { painel: null, planilha: null, vendas: null, vendasAnteriores: null,
-  mesAnterior: null, aba: 'mes', nomes: {} };
+const estado = {
+  base: null,          // extrato preparado, com todos os meses
+  planilha: null,      // linhas do Status clientes
+  problemas: [],       // linhas da planilha com data de aprovação ilegível
+  categorias: {},      // escolhas feitas à mão: favorecido -> categoria
+  mesSel: null,        // 'AAAA-MM'
+  painel: null,        // o mês escolhido, montado a partir de base
+  vendas: null, vendasAnteriores: null, mesAnterior: null,
+  aba: 'mes', nomes: {},
+};
 
 /* ---------- avisos ---------- */
 let relogioAviso = null;
@@ -20,34 +33,6 @@ function avisar(texto, tipo = 'ok', fixo = false) {
   if (!fixo) relogioAviso = setTimeout(() => caixa.classList.add('escondido'), 7000);
 }
 
-/* ---------- categorias guardadas ---------- */
-const chaveLocal = () => 'financeiro-ift-' + (estado.painel ? estado.painel.mes.replace(/ /g, '-') : 'mes');
-
-function mapaAtual() {
-  const m = {};
-  if (estado.painel) for (const l of estado.painel.saidas) {
-    if (l.cat && l.cat !== 'A confirmar') m[l.desc] = l.cat;
-  }
-  return m;
-}
-function guardar() {
-  try { localStorage.setItem(chaveLocal(), JSON.stringify(mapaAtual())); } catch (e) { /* janela anônima */ }
-  guardarDados();
-}
-function lerGuardado(mes) {
-  try {
-    const bruto = localStorage.getItem('financeiro-ift-' + mes.replace(/ /g, '-'));
-    return bruto ? JSON.parse(bruto) : {};
-  } catch (e) { return {}; }
-}
-function aplicarMapa(mapa) {
-  let n = 0;
-  for (const l of estado.painel.saidas) {
-    if (mapa[l.desc] && mapa[l.desc] !== l.cat) { l.cat = mapa[l.desc]; n++; }
-  }
-  return n;
-}
-
 /* ---------- memória do navegador ----------
    O que você carrega fica guardado nesta máquina, para a página já abrir com os
    dados do último uso. Nada disso vai para o GitHub nem para servidor nenhum:
@@ -55,53 +40,109 @@ function aplicarMapa(mapa) {
 const BAU = {
   extrato: 'financeiro-ift-dados-extrato',
   planilha: 'financeiro-ift-dados-planilha',
+  problemas: 'financeiro-ift-problemas-planilha',
   nomes: 'financeiro-ift-nomes',
+  categorias: 'financeiro-ift-categorias',
+  mes: 'financeiro-ift-mes',
+  aba: 'financeiro-ift-aba',
 };
 
+function gravar(chave, valor) {
+  try { localStorage.setItem(chave, JSON.stringify(valor)); return true; } catch (e) { return false; }
+}
+function ler(chave) {
+  try { const bruto = localStorage.getItem(chave); return bruto ? JSON.parse(bruto) : null; } catch (e) { return null; }
+}
+
 function guardarDados() {
-  try {
-    if (estado.painel) localStorage.setItem(BAU.extrato, JSON.stringify(estado.painel));
-    if (estado.planilha) localStorage.setItem(BAU.planilha, JSON.stringify(estado.planilha));
-    localStorage.setItem(BAU.nomes, JSON.stringify(estado.nomes));
-  } catch (e) {
+  let ok = true;
+  if (estado.base) ok = gravar(BAU.extrato, estado.base) && ok;
+  if (estado.planilha) {
+    ok = gravar(BAU.planilha, estado.planilha) && ok;
+    gravar(BAU.problemas, estado.problemas);
+  }
+  gravar(BAU.nomes, estado.nomes);
+  gravar(BAU.categorias, estado.categorias);
+  if (!ok) {
     // Janela anônima ou armazenamento cheio: a página segue funcionando sem memória.
     avisar('Não consegui guardar os dados neste navegador, então eles valem só enquanto a página estiver aberta. Costuma acontecer em janela anônima.', 'atencao');
   }
 }
 
-function recuperarDados() {
-  try {
-    const nomes = localStorage.getItem(BAU.nomes);
-    if (nomes) estado.nomes = JSON.parse(nomes);
-    const extrato = localStorage.getItem(BAU.extrato);
-    if (extrato) {
-      estado.painel = JSON.parse(extrato);
-      marcarZona('zonaExtrato', 'nomeExtrato', estado.nomes.extrato);
-    }
-    const planilha = localStorage.getItem(BAU.planilha);
-    if (planilha) {
-      estado.planilha = JSON.parse(planilha);
-      marcarZona('zonaPlanilha', 'nomePlanilha', estado.nomes.planilha);
-    }
-  } catch (e) { /* dado corrompido: começa do zero */ }
+/* Só guarda o que foi escolhido à mão. Uma categoria que a própria regra já dá
+   não é guardada, para que a regra possa melhorar depois sem ficar presa a uma
+   cópia antiga dela. */
+function filtrarEscolhas(mapa) {
+  const limpo = {};
+  for (const [desc, cat] of Object.entries(mapa || {})) {
+    if (!cat || cat === 'A confirmar' || !CATEGORIAS.includes(cat)) continue;
+    if (categorizar({ desc, hist: '', valor: 0, banco: '' }) === cat) continue;
+    limpo[desc] = cat;
+  }
+  return limpo;
+}
 
-  if (!estado.painel && !estado.planilha) return;
-  casarVendas();
-  if (estado.painel) desenharMes();
-  desenharVendas();
-  habilitar();
+/* Versões anteriores guardavam as categorias mês a mês. Elas são reunidas numa
+   memória só, que vale para todos os meses. */
+function migrarCategoriasAntigas() {
+  try {
+    const juntas = {};
+    const apagar = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const chave = localStorage.key(i);
+      if (/^financeiro-ift-[a-zç]+-de-\d{4}$/.test(chave)) {
+        Object.assign(juntas, JSON.parse(localStorage.getItem(chave)) || {});
+        apagar.push(chave);
+      }
+    }
+    if (!apagar.length) return;
+    estado.categorias = Object.assign(filtrarEscolhas(juntas), estado.categorias);
+    apagar.forEach(c => localStorage.removeItem(c));
+    gravar(BAU.categorias, estado.categorias);
+  } catch (e) { /* sem memória disponível */ }
+}
+
+function recuperarDados() {
+  estado.nomes = ler(BAU.nomes) || {};
+  estado.categorias = ler(BAU.categorias) || {};
+  migrarCategoriasAntigas();
+
+  const base = ler(BAU.extrato);
+  if (base && base.formato === 2) {
+    estado.base = base;
+    marcarZona('zonaExtrato', 'nomeExtrato', estado.nomes.extrato);
+  } else if (base) {
+    // Guardado por uma versão antiga, que só mantinha um mês. Não dá para aproveitar.
+    try { localStorage.removeItem(BAU.extrato); } catch (e) { /* nada a fazer */ }
+    avisar('A página agora trabalha com todos os meses do extrato. Carregue o extrato do Inter de novo, de preferência do ano inteiro. As categorias que você corrigiu foram mantidas.', 'atencao', true);
+  }
+  const planilha = ler(BAU.planilha);
+  if (Array.isArray(planilha) && planilha.length) {
+    estado.planilha = planilha;
+    estado.problemas = ler(BAU.problemas) || [];
+    marcarZona('zonaPlanilha', 'nomePlanilha', estado.nomes.planilha);
+  }
+
+  if (!estado.base && !estado.planilha) return;
+  const aba = ler(BAU.aba);
+  if (aba === 'mes' || aba === 'vendas') estado.aba = aba;
+  escolherMes(ler(BAU.mes));
   mostrarMemoria();
 }
 
 function marcarZona(idZona, idNome, nomeArquivo) {
-  if (!nomeArquivo) return;
   el(idZona).classList.add('pronto');
-  el(idNome).textContent = nomeArquivo;
+  el(idNome).textContent = nomeArquivo || 'arquivo guardado neste navegador';
 }
 
 function mostrarMemoria() {
   const partes = [];
-  if (estado.painel) partes.push('extrato de ' + estado.painel.mes);
+  if (estado.base) {
+    const m = estado.base.meses;
+    partes.push('extrato de ' + (m.length > 1
+      ? MES_CURTO[Number(m[0].slice(5)) - 1] + ' a ' + nomeDoMes(m[m.length - 1])
+      : nomeDoMes(m[0])));
+  }
   if (estado.planilha) partes.push('planilha com ' + estado.planilha.length + ' orçamentos');
   if (!partes.length) { el('memoria').classList.add('escondido'); return; }
   el('memoriaTexto').textContent = 'Guardado neste navegador: ' + partes.join(' e ') +
@@ -110,6 +151,7 @@ function mostrarMemoria() {
 }
 
 el('btnEsquecer').addEventListener('click', () => {
+  if (!confirm('Apagar deste navegador o extrato, a planilha e as categorias que você corrigiu?')) return;
   for (const chave of Object.values(BAU)) {
     try { localStorage.removeItem(chave); } catch (e) { /* nada a fazer */ }
   }
@@ -117,7 +159,7 @@ el('btnEsquecer').addEventListener('click', () => {
 });
 
 /* ---------- carregar arquivos ---------- */
-function ligarZona(idZona, idInput, aoLer, comoTexto) {
+function ligarZona(idZona, idInput, aoLer) {
   const zona = el(idZona), entrada = el(idInput);
   const processa = arquivo => {
     if (!arquivo) return;
@@ -131,79 +173,155 @@ function ligarZona(idZona, idInput, aoLer, comoTexto) {
         guardarDados();
         mostrarMemoria();
       } catch (erro) {
-        zona.classList.remove('pronto');
         avisar('Não consegui ler ' + arquivo.name + '. ' + erro.message, 'erro', true);
       }
     };
     leitor.onerror = () => avisar('O navegador não conseguiu abrir ' + arquivo.name + '.', 'erro', true);
-    if (comoTexto) leitor.readAsText(arquivo, 'utf-8'); else leitor.readAsArrayBuffer(arquivo);
+    leitor.readAsArrayBuffer(arquivo);
   };
-  entrada.addEventListener('change', e => processa(e.target.files[0]));
+  entrada.addEventListener('change', e => {
+    processa(e.target.files[0]);
+    // Sem isso, escolher de novo o mesmo arquivo não dispara nada.
+    e.target.value = '';
+  });
   ['dragenter', 'dragover'].forEach(ev => zona.addEventListener(ev, e => {
     e.preventDefault(); zona.classList.add('sobre');
   }));
-  ['dragleave', 'drop'].forEach(ev => zona.addEventListener(ev, e => {
+  zona.addEventListener('dragleave', e => {
+    if (!zona.contains(e.relatedTarget)) zona.classList.remove('sobre');
+  });
+  zona.addEventListener('drop', e => {
     e.preventDefault(); zona.classList.remove('sobre');
-  }));
-  zona.addEventListener('drop', e => processa(e.dataTransfer.files[0]));
+    processa(e.dataTransfer.files[0]);
+  });
 }
 
 ligarZona('zonaExtrato', 'arqExtrato', (nome, buffer) => {
   // Lido como bytes para o núcleo decidir a codificação, já que o Inter exporta
   // ora em UTF-8, ora em ANSI.
-  const painel = processarExtrato(nome, new Uint8Array(buffer));
-  estado.painel = painel;
-  aplicarMapa(lerGuardado(painel.mes));
-  casarVendas();
-  desenharMes();
-  desenharVendas();
-  habilitar();
-  const d = painel.diagnostico;
-  let texto2 = 'Extrato de ' + painel.mes + ' lido: ' + d.lidos + ' lançamentos, ' +
-    d.internos + ' de CDB e aplicações fora da conta e ' + d.estornos + ' retirados em pares de estorno.';
-  if (d.foraDoMes) texto2 += ' ' + d.foraDoMes + ' lançamentos de outro mês foram descartados.';
-  avisar(texto2, 'ok');
-  if (painel.orfaos.length) {
-    const lista = painel.orfaos.map(o => o.desc + ' em ' + o.data + ', ' + brl(Math.abs(o.valor))).join('; ');
-    avisar('Atenção: devolução sem par de mesmo valor, que pode ser devolução parcial. Não abati nada sozinho. ' + lista, 'atencao', true);
-  }
-}, false);
+  const base = prepararExtrato(nome, new Uint8Array(buffer));
+  estado.base = base;
+  // Arquivo novo abre no mês mais recente dele.
+  escolherMes(base.meses[base.meses.length - 1]);
+  const d = base.diagnostico;
+  avisar('Extrato lido: ' + d.lidos + ' lançamentos em ' + plural(base.meses.length, ' mês', ' meses') +
+    ', ' + d.internos + ' de CDB e aplicações fora da conta e ' + d.estornos +
+    ' retirados em pares de estorno. Escolha o mês nas abas do alto.', 'ok');
+});
 
 ligarZona('zonaPlanilha', 'arqPlanilha', (nome, buffer) => {
   if (typeof XLSX === 'undefined') throw new Error('A biblioteca de planilhas não carregou. Confira a conexão e recarregue a página.');
   const livro = XLSX.read(new Uint8Array(buffer), { type: 'array', cellDates: true });
-  const linhas = lerPlanilha(livro, XLSX);
+  const problemas = [];
+  const linhas = lerPlanilha(livro, XLSX, problemas);
   if (!linhas.length) throw new Error('Não achei nenhuma linha com data de aprovação nas abas de meses.');
   estado.planilha = linhas;
-  casarVendas();
-  desenharVendas();
-  if (estado.painel) desenharMes();
-  habilitar();
+  estado.problemas = problemas;
+  escolherMes(estado.mesSel);
   avisar('Planilha lida: ' + linhas.length + ' orçamentos aprovados em ' +
-    resumoAnual(linhas).length + ' meses.', 'ok');
-}, false);
+    plural(resumoAnual(linhas).length, ' mês.', ' meses.'), 'ok');
+});
 
-function casarVendas() {
-  if (!estado.planilha || !estado.painel) {
-    estado.vendas = estado.vendasAnteriores = estado.mesAnterior = null;
-    return;
+/* ---------- meses ---------- */
+
+function mesesDisponiveis() {
+  const todos = new Set(estado.base ? estado.base.meses : []);
+  if (estado.planilha) for (const m of resumoAnual(estado.planilha)) todos.add(m.chave);
+  return [...todos].sort();
+}
+
+/* Troca o mês de tudo de uma vez. Sem mês válido, fica o mais recente. */
+function escolherMes(chave) {
+  const meses = mesesDisponiveis();
+  if (!meses.length) return;
+  if (!meses.includes(chave)) {
+    // Preferência pelo último mês que tem extrato, que é o que tem despesas para mostrar.
+    const comExtrato = estado.base ? estado.base.meses : [];
+    chave = comExtrato.length ? comExtrato[comExtrato.length - 1] : meses[meses.length - 1];
   }
-  estado.vendas = vendasDoMes(estado.planilha, estado.painel.ano, estado.painel.mesNum);
-  estado.mesAnterior = mesAnterior(estado.painel.ano, estado.painel.mesNum);
-  estado.vendasAnteriores = vendasDoMes(estado.planilha, estado.mesAnterior.ano, estado.mesAnterior.mes);
+  estado.mesSel = chave;
+  gravar(BAU.mes, chave);
+  montarMes();
+  desenharAbasMeses();
+  if (estado.painel) desenharMes();
+  desenharVendas();
+  habilitar();
+}
+
+function montarMes() {
+  const k = estado.mesSel;
+  estado.painel = estado.base && estado.base.meses.includes(k)
+    ? painelDoMes(estado.base, k, estado.categorias)
+    : null;
+  const [ano, mes] = k.split('-').map(Number);
+  estado.ref = { ano, mes };
+  if (estado.planilha) {
+    estado.vendas = vendasDoMes(estado.planilha, ano, mes);
+    estado.mesAnterior = mesAnterior(ano, mes);
+    estado.vendasAnteriores = vendasDoMes(estado.planilha, estado.mesAnterior.ano, estado.mesAnterior.mes);
+  } else {
+    estado.vendas = estado.vendasAnteriores = estado.mesAnterior = null;
+  }
+}
+
+function desenharAbasMeses() {
+  const cx = el('abasMeses');
+  cx.innerHTML = '';
+  const meses = mesesDisponiveis();
+  const anos = new Set(meses.map(m => m.slice(0, 4)));
+  for (const k of meses) {
+    const [a, m] = k.split('-');
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('role', 'tab');
+    b.setAttribute('aria-selected', k === estado.mesSel);
+    const temExtrato = estado.base && estado.base.meses.includes(k);
+    const parcial = temExtrato ? parcialDoMes(k) : '';
+    b.textContent = SIGLA[Number(m) - 1] + (anos.size > 1 ? ' ' + a.slice(2) : '');
+    if (parcial) {
+      const s = document.createElement('small');
+      s.textContent = 'até ' + parcial;
+      b.appendChild(s);
+    } else if (!temExtrato) {
+      const s = document.createElement('small');
+      s.textContent = 'só planilha';
+      b.appendChild(s);
+      b.classList.add('sem-extrato');
+    }
+    b.title = nomeDoMes(k) + (temExtrato ? '' : ', sem extrato carregado para este mês');
+    b.addEventListener('click', () => escolherMes(k));
+    cx.appendChild(b);
+  }
+  // No celular a fileira rola de lado; o mês escolhido fica à vista sem mexer na página.
+  const sel = cx.querySelector('[aria-selected=true]');
+  if (sel) requestAnimationFrame(() => {
+    cx.scrollLeft = Math.max(0, sel.offsetLeft - cx.offsetLeft - (cx.clientWidth - sel.offsetWidth) / 2);
+  });
+}
+
+function parcialDoMes(k) {
+  const [d, m, a] = estado.base.ultimoDia.split('/');
+  if (a + '-' + m !== k) return '';
+  const fim = new Date(Number(a), Number(m), 0).getDate();
+  return Number(d) < fim ? d + '/' + m : '';
 }
 
 function habilitar() {
   el('abaMes').disabled = !estado.painel;
-  el('abaVendas').disabled = !estado.painel && !estado.planilha;
-  el('btnImprimir').disabled = !estado.painel && !estado.planilha;
-  if (estado.painel && estado.aba === 'mes') trocarAba('mes');
-  else if (estado.planilha && !estado.painel) trocarAba('vendas');
+  el('abaVendas').disabled = !estado.mesSel;
+  el('btnImprimir').disabled = !estado.mesSel;
+  if (estado.aba === 'mes' && !estado.painel) trocarAba('vendas', false);
+  else trocarAba(estado.aba, false);
+  el('semExtrato').classList.toggle('escondido', !!estado.painel || !estado.mesSel);
+  if (!estado.painel && estado.mesSel) {
+    el('semExtrato').textContent = 'Não há extrato carregado com lançamentos de ' + nomeDoMes(estado.mesSel) +
+      ', então a aba Despesas fica fechada neste mês. A conciliação mostra o que dá para ver só com a planilha.';
+  }
 }
 
-/* ---------- abas ---------- */
-function trocarAba(qual) {
-  estado.aba = qual;
+/* ---------- abas Despesas e Conciliação ---------- */
+function trocarAba(qual, lembrar = true) {
+  if (lembrar) { estado.aba = qual; gravar(BAU.aba, qual); }
   el('abaMes').setAttribute('aria-selected', qual === 'mes');
   el('abaVendas').setAttribute('aria-selected', qual === 'vendas');
   el('telaMes').classList.toggle('escondido', qual !== 'mes');
@@ -214,19 +332,24 @@ el('abaVendas').addEventListener('click', () => trocarAba('vendas'));
 
 /* ================= TELA DO MÊS ================= */
 
+function rotuloMes(P) {
+  return P.mes + (P.parcial ? ', parcial até ' + P.parcial : '');
+}
+
 function desenharMes() {
   const P = estado.painel, T = P.totais, V = estado.vendas, A = estado.vendasAnteriores;
   document.title = 'Financeiro IFT — ' + P.mes;
 
   el('cEnt').textContent = brl(T.entradas);
-  el('nEnt').textContent = T.qtdEntradas + ' recebimentos, ' + brl(T.receitaCartao) + ' no cartão pelo link do C6';
+  el('nEnt').textContent = T.qtdEntradas + ' recebimentos, ' + brl(T.receitaCartao) + ' no cartão pelo link do C6' +
+    (T.naoReceita ? ' e ' + brl(T.naoReceita) + ' que não são venda' : '');
 
   if (V) {
     el('cVenda').textContent = brl(V.venda);
     el('nVenda').textContent = V.qtd + ' orçamentos aprovados';
   } else {
-    el('cVenda').textContent = 'sem planilha';
-    el('nVenda').textContent = 'Carregue o Status clientes para ver as vendas';
+    el('cVenda').textContent = estado.planilha ? 'sem vendas' : 'sem planilha';
+    el('nVenda').textContent = estado.planilha ? 'A planilha não tem aprovações neste mês' : 'Carregue o Status clientes para ver as vendas';
   }
 
   if (A) {
@@ -234,13 +357,14 @@ function desenharMes() {
     let nota = A.qtd + ' orçamentos em ' + nomeMes(estado.mesAnterior);
     if (V && A.venda > 0) {
       const var_ = ((V.venda - A.venda) / A.venda) * 100;
-      const sinal = var_ >= 0 ? '+' : '\u2212';
-      nota += '. O mês atual está ' + sinal + Math.abs(var_).toFixed(1).replace('.', ',') + '%';
+      const sinal = var_ >= 0 ? '+' : '−';
+      nota += '. O mês escolhido está ' + sinal + Math.abs(var_).toFixed(1).replace('.', ',') + '%' +
+        (P.parcial ? ', ainda parcial' : '');
     }
     el('nVendaAnt').textContent = nota;
   } else {
-    el('cVendaAnt').textContent = V ? 'sem dados' : '\u2014';
-    el('nVendaAnt').textContent = V ? 'A planilha não tem o mês anterior' : '';
+    el('cVendaAnt').textContent = estado.planilha ? 'sem dados' : '—';
+    el('nVendaAnt').textContent = estado.planilha ? 'A planilha não tem o mês anterior' : '';
   }
 
   el('cSai').textContent = brl(T.saidas);
@@ -249,17 +373,27 @@ function desenharMes() {
   el('nPes').textContent = T.qtdPessoalIda + ' transferências enviadas, ' + brl(T.pessoalVolta) + ' devolvidos';
 
   const saldo = T.entradas + T.pessoalVolta - T.saidas - T.pessoalIda;
-  el('rodape').innerHTML = '';
-  el('rodape').textContent = 'Movimentação de ' + P.mes + '. Entrou ' + brl(T.entradas) +
+  el('rodape').textContent = 'Movimentação de ' + rotuloMes(P) + '. Entrou ' + brl(T.entradas) +
     ' e saiu ' + brl(T.saidas + T.pessoalIda) + ' somando despesas e conta pessoal, então o mês fechou em ' +
     brl(saldo) + '.';
 
-  el('notaFim').textContent = 'Foram excluídos cofrinho, CDB, aplicações e resgates, por serem movimentação dentro da própria conta. ' +
-    'Os pares de estorno saíram dos dois lados para não inflar entradas nem saídas. Pagamentos ao Mercado Pago e à Portoseg ' +
-    'aparecem como pagamento de cartão, e as despesas que os geraram estão nas faturas. Depósito vindo de Isabella Fortunato ' +
-    'Traduções é cliente pagando no cartão pelo link do C6, e por isso conta como receita.';
+  // Devolução sem par e mês incompleto ficam visíveis dentro do próprio mês.
+  const avisos = [];
+  if (P.parcial) avisos.push('O extrato termina em ' + P.parcial + ', então ' + P.mes + ' ainda está incompleto.');
+  if (P.orfaos.length) {
+    avisos.push('Devolução sem par de mesmo valor, que pode ser devolução parcial ou de um pagamento fora do extrato. Não abati nada sozinho: ' +
+      P.orfaos.map(o => o.desc + ' em ' + o.data + ', ' + brl(Math.abs(o.valor))).join('; ') + '.');
+  }
+  el('avisoMes').textContent = avisos.join(' ');
+  el('avisoMes').classList.toggle('escondido', !avisos.length);
 
-  grafico(); tabelaSaidas(''); tabelaPessoal();
+  el('notaFim').textContent = 'Foram excluídos cofrinho, CDB, aplicações e resgates, por serem movimentação dentro da própria conta. ' +
+    'Os pares de estorno saíram dos dois lados para não inflar entradas nem saídas, mesmo quando a devolução caiu em outro mês. ' +
+    'Pagamentos ao Mercado Pago e à Portoseg aparecem como pagamento de cartão, e as despesas que os geraram estão nas faturas. ' +
+    'Depósito vindo de Isabella Fortunato Traduções pelo C6 é cliente pagando no cartão pelo link, e por isso conta como receita; ' +
+    'vindo do Cora, é dinheiro da própria empresa voltando, e não conta como venda.';
+
+  grafico(); tabelaSaidas(el('buscaSaida').value); tabelaPessoal();
 }
 
 function nomeMes(ref) {
@@ -269,7 +403,7 @@ function nomeMes(ref) {
 /* ---------- gráfico de barras horizontal ----------
    Uma série só, então uma cor só e rótulo direto em cada barra: legenda seria
    ruído. A categoria pendente sai em outro tom para pular aos olhos. */
-function desenhaGrafico(destino, itens, aoPassar) {
+function desenhaGrafico(destino, itens, aoPassar, aoClicar) {
   const cx = el(destino);
   cx.innerHTML = '';
   if (!itens.length) return;
@@ -278,7 +412,7 @@ function desenhaGrafico(destino, itens, aoPassar) {
 
   for (const item of itens) {
     const linha = document.createElement('div');
-    linha.className = 'linha-barra' + (item.pendente ? ' pendente' : '');
+    linha.className = 'linha-barra' + (item.pendente ? ' pendente' : '') + (item.atual ? ' atual' : '');
 
     const rotulo = document.createElement('span');
     rotulo.className = 'rotulo-cat';
@@ -293,7 +427,7 @@ function desenhaGrafico(destino, itens, aoPassar) {
     pista.className = 'pista';
     const marca = document.createElement('div');
     marca.className = 'marca';
-    marca.style.width = ((item.valor / maior) * 100) + '%';
+    marca.style.width = Math.max(0, (item.valor / maior) * 100) + '%';
     pista.appendChild(marca);
 
     const cifra = document.createElement('span');
@@ -305,6 +439,10 @@ function desenhaGrafico(destino, itens, aoPassar) {
     const fatia = total ? (item.valor / total) * 100 : 0;
     linha.addEventListener('mousemove', e => mostrarDica(e, aoPassar(item, fatia)));
     linha.addEventListener('mouseleave', esconderDica);
+    if (aoClicar) {
+      linha.classList.add('clicavel');
+      linha.addEventListener('click', () => { esconderDica(); aoClicar(item); });
+    }
     cx.appendChild(linha);
   }
 }
@@ -322,6 +460,9 @@ function mostrarDica(evento, html) {
 }
 function esconderDica() { el('dica').hidden = true; }
 
+/* O nome do favorecido vem do extrato e vai para a dica como HTML. */
+const escapar = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
 function grafico() {
   const mapa = new Map();
   for (const l of estado.painel.saidas) {
@@ -336,12 +477,13 @@ function grafico() {
 
   const total = arred(itens.reduce((a, b) => a + b.valor, 0));
   const pend = itens.find(i => i.pendente);
-  el('subGrafico').textContent = itens.length + ' categorias somando ' + brl(total) +
+  el('subGrafico').textContent = !itens.length ? 'Nenhuma despesa neste mês.' :
+    plural(itens.length, ' categoria', ' categorias') + ' somando ' + brl(total) +
     (pend ? '. Ainda há ' + brl(pend.valor) + ' sem categoria, que é ' +
       ((pend.valor / total) * 100).toFixed(0) + '% do total.' : '. Tudo categorizado.');
 
   desenhaGrafico('grafico', itens, (item, fatia) =>
-    '<b>' + item.nome + '</b><br><span class="mono">' + brl(item.valor) + '</span> em ' +
+    '<b>' + escapar(item.nome) + '</b><br><span class="mono">' + brl(item.valor) + '</span> em ' +
     item.detalhe.trim() + '<br>' + fatia.toFixed(1).replace('.', ',') + '% das despesas do mês');
 }
 
@@ -370,14 +512,16 @@ function tabelaSaidas(filtro) {
     if (l.cat === 'A confirmar') sel.classList.add('pendente');
     sel.addEventListener('change', e => {
       const valor = e.target.value;
-      let mudadas = 0;
-      for (const o of estado.painel.saidas) if (o.desc === l.desc) { o.cat = valor; mudadas++; }
-      guardar();
-      tabelaSaidas(el('buscaSaida').value);
-      grafico();
+      // A escolha vale para o favorecido em todos os meses, não só neste.
+      if (valor === 'A confirmar') delete estado.categorias[l.desc];
+      else estado.categorias[l.desc] = valor;
+      const mudadas = estado.painel.saidas.filter(o => o.desc === l.desc).length;
+      gravar(BAU.categorias, estado.categorias);
+      montarMes();
+      desenharMes();
       avisar(mudadas > 1
-        ? mudadas + ' lançamentos de ' + l.desc + ' foram categorizados como ' + valor + '.'
-        : 'Categoria salva.', 'ok');
+        ? mudadas + ' lançamentos de ' + l.desc + ' neste mês foram categorizados como ' + valor + '. A escolha vale também para os outros meses.'
+        : 'Categoria salva, e vale também para os outros meses.', 'ok');
     });
     td3.appendChild(sel);
     // O seletor não vai para o papel, então a categoria também existe como texto.
@@ -392,7 +536,14 @@ function tabelaSaidas(filtro) {
     corpo.appendChild(tr);
   }
   el('vazioSaida').classList.toggle('escondido', vis > 0);
+  el('vazioSaida').textContent = estado.painel.saidas.length ? 'Nenhuma linha corresponde à busca.' : 'Nenhuma despesa neste mês.';
   el('contaSaida').textContent = vis + ' de ' + estado.painel.saidas.length + ' linhas';
+}
+
+function obsEntrada(l) {
+  if (l.via === 'cartao') return 'Cartão pelo link do C6';
+  if (l.via === 'outra') return 'Conta da empresa em outro banco (código ' + l.banco + '), a confirmar';
+  return l.obs || '';
 }
 
 function tabelaEntradas(filtro) {
@@ -401,7 +552,7 @@ function tabelaEntradas(filtro) {
   const termo = (filtro || '').trim().toLowerCase();
   let vis = 0;
   for (const l of estado.painel.entradas) {
-    if (termo && !(l.desc + ' ' + (l.obs || '')).toLowerCase().includes(termo)) continue;
+    if (termo && !(l.desc + ' ' + obsEntrada(l)).toLowerCase().includes(termo)) continue;
     vis++;
     const tr = document.createElement('tr');
     const td1 = document.createElement('td'); td1.className = 'data'; td1.textContent = l.data;
@@ -409,7 +560,7 @@ function tabelaEntradas(filtro) {
     const sp = document.createElement('span'); sp.className = 'tipo'; sp.textContent = l.hist;
     td2.appendChild(sp);
     const td3 = document.createElement('td'); td3.className = 'obs';
-    td3.textContent = l.via === 'cartao' ? 'Cartão pelo link do C6' : (l.obs || '');
+    td3.textContent = obsEntrada(l);
     const td4 = document.createElement('td');
     td4.className = 'valor mais';
     td4.textContent = '+ ' + brl(l.valor);
@@ -417,6 +568,7 @@ function tabelaEntradas(filtro) {
     corpo.appendChild(tr);
   }
   el('vazioEnt').classList.toggle('escondido', vis > 0);
+  el('vazioEnt').textContent = estado.painel.entradas.length ? 'Nenhuma linha corresponde à busca.' : 'Nenhuma entrada neste mês.';
   el('contaEnt').textContent = vis + ' de ' + estado.painel.entradas.length + ' linhas';
 }
 
@@ -441,37 +593,35 @@ el('buscaSaida').addEventListener('input', e => { if (estado.painel) tabelaSaida
 el('buscaEnt').addEventListener('input', e => { if (estado.painel) tabelaEntradas(e.target.value); });
 
 el('btnSalvar').addEventListener('click', () => {
-  if (!estado.painel) return;
-  const conteudo = JSON.stringify({ mes: estado.painel.mes, categorias: mapaAtual() }, null, 2);
+  const conteudo = JSON.stringify({ categorias: estado.categorias }, null, 2);
   const blob = new Blob([conteudo], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'Categorias ' + estado.painel.mes + '.json';
+  a.download = 'Categorias Financeiro IFT.json';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(a.href);
-  guardar();
-  avisar('Arquivo de categorias baixado.', 'ok');
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  avisar('Arquivo de categorias baixado, com ' + plural(Object.keys(estado.categorias).length, ' favorecido.', ' favorecidos.'), 'ok');
 });
 
 el('btnCarregar').addEventListener('click', () => el('arqCategorias').click());
 el('arqCategorias').addEventListener('change', evento => {
   const arquivo = evento.target.files[0];
-  if (!arquivo || !estado.painel) return;
+  evento.target.value = '';
+  if (!arquivo) return;
   const leitor = new FileReader();
   leitor.onload = () => {
     try {
       const lido = JSON.parse(leitor.result);
-      const n = aplicarMapa(lido.categorias || lido);
-      guardar();
-      tabelaSaidas(el('buscaSaida').value);
-      grafico();
-      avisar(plural(n, ' lançamento recuperado.', ' lançamentos recuperados.'), 'ok');
+      const novas = filtrarEscolhas(lido.categorias || lido);
+      Object.assign(estado.categorias, novas);
+      gravar(BAU.categorias, estado.categorias);
+      if (estado.painel) { montarMes(); desenharMes(); }
+      avisar(plural(Object.keys(novas).length, ' favorecido recuperado.', ' favorecidos recuperados.'), 'ok');
     } catch (e) {
       avisar('Não consegui ler esse arquivo. Ele precisa ser o JSON que o botão de salvar gera.', 'erro', true);
     }
   };
   leitor.readAsText(arquivo);
-  evento.target.value = '';
 });
 
 /* ================= RELATÓRIO IMPRESSO ================= */
@@ -481,25 +631,25 @@ el('arqCategorias').addEventListener('change', evento => {
    navegador, e não só no clique, para funcionar também quando a pessoa usa
    Ctrl+P ou manda imprimir pelo menu. */
 function prepararPapel() {
-  if (!estado.painel && !estado.planilha) return;
+  if (!estado.mesSel) return;
   document.body.classList.toggle('com-tabelas', el('optTabelas').checked);
 
   const quando = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
-  el('capaTitulo').textContent = estado.painel
-    ? 'Relatório de ' + estado.painel.mes
-    : 'Relatório de vendas';
+  el('capaTitulo').textContent = 'Relatório de ' + nomeDoMes(estado.mesSel);
   el('capaNota').textContent = 'Emitido em ' + quando +
+    (estado.painel && estado.painel.parcial ? '. Mês parcial, com o extrato até ' + estado.painel.parcial : '') +
     (estado.planilha ? '. Vendas pela data de aprovação, que é a data do pagamento.' : '.') +
-    (estado.painel && !estado.planilha ? ' Sem a planilha carregada, o relatório sai sem a parte de vendas.' : '');
+    (estado.painel && !estado.planilha ? ' Sem a planilha carregada, o relatório sai sem a parte de vendas.' : '') +
+    (!estado.painel ? ' Sem extrato deste mês, o relatório sai só com a parte de vendas.' : '');
 
   // As duas telas precisam estar montadas, mesmo a que está fechada na tela.
   el('telaMes').classList.toggle('escondido', !estado.painel);
-  el('telaVendas').classList.toggle('escondido', !estado.planilha);
+  el('telaVendas').classList.toggle('escondido', !estado.planilha && !estado.painel);
 }
 
 function restaurarTela() {
   document.body.classList.remove('com-tabelas');
-  trocarAba(estado.aba);
+  trocarAba(estado.aba === 'mes' && !estado.painel ? 'vendas' : estado.aba, false);
 }
 
 window.addEventListener('beforeprint', prepararPapel);
@@ -511,12 +661,13 @@ el('btnImprimir').addEventListener('click', () => {
   setTimeout(() => { window.print(); restaurarTela(); }, 60);
 });
 
-/* ================= TELA DE VENDAS ================= */
+/* ================= TELA DE CONCILIAÇÃO ================= */
 
 function desenharVendas() {
   const P = estado.painel, V = estado.vendas;
   const linhas = estado.planilha;
   const anual = linhas ? resumoAnual(linhas) : [];
+  const k = estado.mesSel;
 
   if (P && V) {
     const T = P.totais;
@@ -526,52 +677,66 @@ function desenharVendas() {
     el('kEntNota').textContent = T.qtdEntradas + ' recebimentos no extrato';
     const dif = T.entradas - V.venda;
     const elDif = el('kDif');
-    elDif.textContent = (dif < 0 ? '\u2212 ' : '+ ') + brl(Math.abs(dif));
+    elDif.textContent = (dif < 0 ? '− ' : '+ ') + brl(Math.abs(dif));
     elDif.style.color = dif < 0 ? 'var(--saida)' : 'var(--entrada)';
     const parc = (V.regimes.parceiro || { valor: 0, qtd: 0 });
     el('kParceiro').textContent = brl(parc.valor);
     el('kParceiroNota').textContent = plural(parc.qtd, ' orçamento fechado com parceiro', ' orçamentos fechados com parceiros') +
       ', para entrar no caixa do mês seguinte';
-    el('kRodape').textContent = 'Conciliação de ' + P.mes +
+    el('kRodape').textContent = 'Conciliação de ' + rotuloMes(P) +
       '. Venda é o que foi fechado com o cliente, entrada é o que o banco recebeu, e a diferença tem explicação, não é erro.';
     el('secaoPonte').classList.remove('escondido');
     ponte();
   } else {
-    for (const id of ['kVenda', 'kEnt', 'kDif', 'kParceiro']) el(id).textContent = '\u2014';
-    el('kVendaNota').textContent = P ? 'Carregue a planilha para conciliar' : 'Carregue o extrato e a planilha';
-    el('kEntNota').textContent = el('kParceiroNota').textContent = '';
-    el('kRodape').textContent = linhas
-      ? 'A conciliação precisa do extrato do mês e da planilha ao mesmo tempo. Abaixo, o que dá para ver só com a planilha.'
-      : '';
+    el('kDif').style.color = '';
+    for (const id of ['kVenda', 'kEnt', 'kDif', 'kParceiro']) el(id).textContent = '—';
+    if (V) {
+      el('kVenda').textContent = brl(V.venda);
+      const parc = (V.regimes.parceiro || { valor: 0, qtd: 0 });
+      el('kParceiro').textContent = brl(parc.valor);
+      el('kParceiroNota').textContent = plural(parc.qtd, ' orçamento fechado com parceiro', ' orçamentos fechados com parceiros');
+      el('kVendaNota').textContent = V.qtd + ' orçamentos aprovados em ' + nomeDoMes(k);
+    } else {
+      el('kVendaNota').textContent = !linhas ? 'Carregue a planilha para conciliar' : 'A planilha não tem aprovações neste mês';
+      el('kParceiroNota').textContent = '';
+    }
+    if (P) {
+      el('kEnt').textContent = brl(P.totais.entradas);
+      el('kEntNota').textContent = P.totais.qtdEntradas + ' recebimentos no extrato';
+    } else {
+      el('kEntNota').textContent = estado.base ? 'O extrato carregado não tem este mês' : 'Carregue o extrato do Inter';
+    }
+    el('kRodape').textContent = 'A conciliação precisa do extrato e da planilha do mesmo mês. Abaixo, o que dá para ver com o que foi carregado.';
     el('secaoPonte').classList.add('escondido');
   }
 
-  if (P) { tabelaEntradas(''); el('secEntradas').classList.remove('escondido'); }
+  if (P) { tabelaEntradas(el('buscaEnt').value); el('secEntradas').classList.remove('escondido'); }
   else el('secEntradas').classList.add('escondido');
 
+  // Linhas da planilha com data ilegível: a venda delas não entra em mês nenhum.
+  const prob = estado.problemas || [];
+  el('avisoPlanilha').classList.toggle('escondido', !prob.length);
+  if (prob.length) {
+    el('avisoPlanilha').textContent = 'A planilha tem ' + plural(prob.length, ' linha', ' linhas') +
+      ' com a data de aprovação ilegível, que ficam fora de todos os meses até serem corrigidas: ' +
+      prob.map(p => 'aba ' + p.aba + ', linha ' + p.linha + ' (' + (p.cli || 'sem cliente') +
+        (p.orc ? ', orçamento ' + p.orc : '') + ', escrito "' + p.valor + '")').join('; ') + '.';
+  }
+
+  el('secParceiros').classList.toggle('escondido', !linhas);
+  el('secVendasAno').classList.toggle('escondido', !linhas);
   if (!linhas) return;
 
   desenhaGrafico('graficoVendas', anual.map(m => ({
     nome: MES_CURTO[m.mes - 1] + ' de ' + m.ano,
     valor: m.venda,
     detalhe: m.qtd + ' orçamentos',
-    pendente: P && m.ano === P.ano && m.mes === P.mesNum ? false : false,
+    chave: m.chave,
+    atual: m.chave === k,
   })), (item, fatia) => '<b>' + item.nome + '</b><br><span class="mono">' + brl(item.valor) +
-    '</span> em ' + item.detalhe + '<br>' + fatia.toFixed(1).replace('.', ',') + '% do ano');
+    '</span> em ' + item.detalhe + '<br>' + fatia.toFixed(1).replace('.', ',') + '% do período<br>Clique para abrir este mês',
+  item => escolherMes(item.chave));
 
-  const seletor = el('mesParceiro');
-  const escolhido = seletor.value;
-  seletor.innerHTML = '';
-  for (const m of anual.slice().reverse()) {
-    const o = document.createElement('option');
-    o.value = m.chave;
-    o.textContent = MES_CURTO[m.mes - 1] + ' de ' + m.ano;
-    seletor.appendChild(o);
-  }
-  // O padrão é o mês do extrato; sem extrato, o último mês da planilha.
-  const alvo = P ? P.ano + '-' + String(P.mesNum).padStart(2, '0') : null;
-  if (escolhido && anual.some(m => m.chave === escolhido)) seletor.value = escolhido;
-  else if (alvo && anual.some(m => m.chave === alvo)) seletor.value = alvo;
   tabelaParceiros();
 }
 
@@ -589,27 +754,32 @@ function ponte() {
       valor: V.venda, sinal: '' },
     { classe: 'menos', texto: 'Parceiro, acerta no mês seguinte',
       nota: plural(parceiro.qtd, ' orçamento de parceiro', ' orçamentos de parceiros') + ', que entram no caixa do mês que vem',
-      valor: -parceiro.valor, sinal: '\u2212 ' },
+      valor: -parceiro.valor, sinal: '− ' },
     { classe: 'menos', texto: 'Cartão pelo link, cai 14 dias depois',
       nota: plural(cartao.qtd, ' orçamento no cartão', ' orçamentos no cartão') + ', que chegam pelo C6 duas semanas após a aprovação',
-      valor: -cartao.valor, sinal: '\u2212 ' },
+      valor: -cartao.valor, sinal: '− ' },
   ];
   if (faturado.valor > 0) {
     passos.push({ classe: 'menos', texto: 'Faturado, sem data de recebimento',
       nota: plural(faturado.qtd, ' orçamento faturado', ' orçamentos faturados'),
-      valor: -faturado.valor, sinal: '\u2212 ' });
+      valor: -faturado.valor, sinal: '− ' });
   }
-  const proprioMes = V.venda - parceiro.valor - cartao.valor - faturado.valor;
+  const proprioMes = arred(V.venda - parceiro.valor - cartao.valor - faturado.valor);
   passos.push({ classe: '', texto: 'Venda paga no próprio mês',
     nota: plural(pix.qtd, ' orçamento no pix, pago na aprovação', ' orçamentos no pix, pagos na aprovação'),
     valor: proprioMes, sinal: '' });
   passos.push({ classe: 'mais', texto: 'Correio e DHL cobrados do cliente',
     nota: 'Reembolso do envio, que entra na conta mas não é venda', valor: V.correio, sinal: '+ ' });
+  if (T.naoReceita > 0) {
+    passos.push({ classe: 'mais', texto: 'Entradas que não são venda',
+      nota: plural(T.qtdNaoReceita, ' lançamento', ' lançamentos') + ', como retorno do Cora, devolução ou estorno de cartão. Estão marcados na lista de entradas',
+      valor: T.naoReceita, sinal: '+ ' });
+  }
 
-  const anterior = T.entradas - proprioMes - V.correio;
+  const anterior = arred(T.entradas - proprioMes - V.correio - T.naoReceita);
   passos.push({ classe: anterior < 0 ? 'menos' : 'mais', texto: 'Recebido de meses anteriores',
     nota: 'Parceiros acertando o mês passado e cartão aprovado antes. Do C6 chegaram ' + brl(T.receitaCartao) + ' neste mês',
-    valor: anterior, sinal: anterior < 0 ? '\u2212 ' : '+ ' });
+    valor: anterior, sinal: anterior < 0 ? '− ' : '+ ' });
   passos.push({ classe: 'fecho', texto: 'Dinheiro que entrou na conta',
     nota: T.qtdEntradas + ' recebimentos no extrato do Inter', valor: T.entradas, sinal: '' });
 
@@ -632,14 +802,17 @@ function ponte() {
   }
 }
 
+/* Parceiros que fecharam no mês escolhido. O acerto deles cai no mês seguinte,
+   então é nas entradas do mês seguinte que a página procura o pagamento. */
 function tabelaParceiros() {
-  const chave = el('mesParceiro').value;
-  if (!chave) return;
-  const [ano, mes] = chave.split('-').map(Number);
+  const { ano, mes } = estado.ref;
   const lista = parceirosPorMes(estado.planilha, ano, mes);
   const corpo = el('corpoParceiro');
   corpo.innerHTML = '';
-  const entradas = estado.painel ? estado.painel.entradas : null;
+  const seguinte = mes === 12 ? chaveDe(ano + 1, 1) : chaveDe(ano, mes + 1);
+  const temSeguinte = estado.base && estado.base.meses.includes(seguinte);
+  const entradas = temSeguinte ? painelDoMes(estado.base, seguinte, estado.categorias).entradas : null;
+  el('thEncontrado').textContent = 'Encontrado em ' + MES_CURTO[Number(seguinte.slice(5)) - 1];
 
   for (const p of lista) {
     const tr = document.createElement('tr');
@@ -650,12 +823,12 @@ function tabelaParceiros() {
     const r = document.createElement('td'); r.className = 'valor';
     if (!entradas) {
       r.textContent = '—';
-      r.title = 'Carregue o extrato do Inter para procurar os pagamentos.';
+      r.title = 'O extrato carregado não tem ' + nomeDoMes(seguinte) + ', que é quando o parceiro acerta.';
     } else {
       const achado = recebidoDe(p.nome, entradas);
       r.textContent = achado.qtd ? brl(achado.valor) : 'nada encontrado';
       r.classList.add(achado.valor >= p.valor ? 'mais' : 'menos');
-      r.title = achado.qtd ? achado.qtd + ' lançamentos com esse nome no extrato carregado' : '';
+      r.title = achado.qtd ? achado.qtd + ' lançamentos com esse nome em ' + nomeDoMes(seguinte) : '';
     }
     tr.append(nome, q, v, c, r);
     corpo.appendChild(tr);
@@ -663,10 +836,8 @@ function tabelaParceiros() {
   el('vazioParceiro').classList.toggle('escondido', lista.length > 0);
   const soma = arred(lista.reduce((a, b) => a + b.valor, 0));
   el('contaParceiro').textContent = lista.length
-    ? plural(lista.length, ' parceiro, ', ' parceiros, ') + brl(soma) + ' fechados'
+    ? plural(lista.length, ' parceiro, ', ' parceiros, ') + brl(soma) + ' fechados em ' + nomeDoMes(estado.mesSel)
     : '';
 }
-el('mesParceiro').addEventListener('change', tabelaParceiros);
-
 
 recuperarDados();

@@ -1,12 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Financeiro IFT">
   <title>Financeiro IFT</title>
-  <!-- O ícone repete o gesto do painel: barras horizontais de tamanhos
-       diferentes, com a ponta arredondada, saindo todas da mesma margem.
-       As medidas são grossas de propósito, para o desenho sobreviver a 16px. -->
-  <rect width="32" height="32" rx="7" fill="#5B3E8E"/>
-  <g fill="#EDEAE4">
-    <rect x="6" y="5"  width="20" height="6" rx="3"/>
-    <rect x="6" y="14" width="13" height="6" rx="3"/>
-    <rect x="6" y="23" width="8"  height="6" rx="3"/>
-  </g>
+  <!-- R$ branco sobre telha, no mesmo desenho do ícone de cédula de referência:
+       fundo com leve degradê, um anel claro e as letras em serifa negrita.
+       As letras estão em contorno vetorial, então não dependem de fonte instalada. -->
+  <defs>
+    <linearGradient id="telha" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#C2603A"/>
+      <stop offset="1" stop-color="#A2482A"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="url(#telha)"/>
+  <circle cx="16" cy="16" r="12.2" fill="none" stroke="#FFFFFF" stroke-opacity=".35" stroke-width="1.1"/>
+  <g fill="#FFFFFF" transform="translate(6.650 20.664) scale(0.006248 -0.006248)"><path transform="translate(0 0)" d="M1087 729Q1176 716 1237.0 670.0Q1298 624 1343 537L1561 121H1714V0H1223L985 451Q916 591 867.5 629.5Q819 668 733 668H672V121H864V0H96V121H287V1372H96V1493H948Q1208 1493 1349.5 1388.5Q1491 1284 1491 1092Q1491 936 1390.5 845.5Q1290 755 1087 729ZM672 788H803Q943 788 1018.5 864.0Q1094 940 1094 1081Q1094 1222 1018.5 1297.0Q943 1372 803 1372H672Z"/><path transform="translate(1642 0)" d="M195 59V350H315Q332 216 410.5 150.0Q489 84 633 84H647V489Q398 544 290.0 639.0Q182 734 182 897Q182 1077 304.5 1180.5Q427 1284 647 1290V1559H768V1290Q880 1284 982.5 1262.5Q1085 1241 1182 1202V930H1061Q1045 1046 968.5 1110.5Q892 1175 768 1177V805Q1037 746 1146.0 646.5Q1255 547 1255 367Q1255 182 1128.5 79.5Q1002 -23 768 -29V-299H647V-29Q537 -27 424.0 -5.0Q311 17 195 59ZM647 1178Q562 1167 512.5 1125.0Q463 1083 463 1022Q463 952 505.5 909.0Q548 866 647 838ZM768 84Q869 95 921.0 138.5Q973 182 973 256Q973 330 924.5 378.0Q876 426 768 457Z"/></g>
 </svg>
